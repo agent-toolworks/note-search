@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Ranking: a note named after what was asked for (its title, an alias or its
+  file name) now gets 1.6x, up from 1.3x, so it outranks a note that only lists
+  the thing as an entity (1.5x). A superseded decision record ranked above the
+  one that replaced it, and an incident above the page about the table it
+  named. Measured on four question sets (fixtures/eval, the Copperleaf Coffee
+  docs, the same with 5,000 distractor notes, the real-notes set): three
+  questions moved to first place, none moved down; 2.0x and above cost
+  real-notes questions.
+
 ## 0.2.0 - 2026-11-03
 
 - Claude Code plugin: the `note-search` skill tells agents when to search, to

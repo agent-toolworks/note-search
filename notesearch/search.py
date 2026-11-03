@@ -21,6 +21,7 @@ from __future__ import annotations
 import difflib
 import itertools
 import json
+import os
 import re
 import time
 from dataclasses import dataclass, field
@@ -140,6 +141,15 @@ def parse_terms(wording: str) -> list:
 def content_terms(terms: list) -> list:
     kept = [t for t in terms if t.phrase or t.text.lower() not in STOPWORDS]
     return kept or terms
+
+
+# The note named after what was asked for -- its title, an alias or its file name.
+# 1.3 lost to the 1.5 a note gets for merely listing the thing as an entity, so a
+# superseded decision or an incident outranked the page about it. Measured
+# 2026-11-03 over four question sets (fixtures/eval, Copperleaf docs, Copperleaf
+# plus 5,000 distractors, the real-notes set): 1.6 moved three questions to first
+# place and none down; 2.0 and 2.5 cost real-notes questions.
+OWN_BOOST = 1.6
 
 
 class Searcher:
@@ -415,7 +425,7 @@ class Searcher:
             # The note named after what was asked for: its title, an alias or its file name.
             own = {(title or "").lower(), stem} | {a.lower() for a in json.loads(aliases or "[]")}
             if own & wanted:
-                score *= 1.3
+                score *= OWN_BOOST
             if stale:
                 score *= 0.5
             score *= 1 + 0.05 * min(inlinks.get(stem, 0), 4)
