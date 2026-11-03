@@ -1,0 +1,764 @@
+{
+ "config": "ns.json",
+ "generate": [
+  {
+   "group": "kb",
+   "path": "journal/ops-journal-2025.md",
+   "mb": 5,
+   "seed": 7,
+   "inject": [
+    {
+     "at_mb": 3.2,
+     "text": "## 2025-11-19 refunds-worker stuck\n\nrefunds-worker stopped processing refund_requests because of a poison message. It now moves a message to the dead-letter queue after 5 failed attempts."
+    },
+    {
+     "at_mb": 4.1,
+     "text": "## 2025-12-02 expired certificate on api-edge\n\nThe TLS certificate on api-edge expired at midnight UTC because renewal still pointed at the old DNS provider. Renewals now alert 21 days ahead."
+    },
+    {
+     "at_mb": 4.8,
+     "text": "## 2025-12-20 cache stampede on product pages\n\nWhen the product cache was flushed during the sale, every page request went to catalog-service at once. Cache entries now refresh early with a random offset."
+    }
+   ]
+  }
+ ],
+ "questions": [
+  {
+   "id": "q01",
+   "kind": "exact",
+   "ask": "what writes to orders_v2?",
+   "wordings": [
+    "orders_v2 writes",
+    "OrderService orders_v2 insert"
+   ],
+   "expect": [
+    "kb:tables/orders_v2.md",
+    "kb:services/orders-api.md"
+   ]
+  },
+  {
+   "id": "q02",
+   "kind": "exact",
+   "ask": "PAYGW_POOL_SIZE",
+   "wordings": [
+    "PAYGW_POOL_SIZE value"
+   ],
+   "expect": [
+    "kb:services/payment-gateway.md",
+    "kb:runbooks/pay-504.md"
+   ]
+  },
+  {
+   "id": "q03",
+   "kind": "exact",
+   "ask": "outbox_events retention",
+   "wordings": [
+    "outbox_events deleted after",
+    "outbox-janitor"
+   ],
+   "expect": [
+    "kb:tables/outbox_events.md"
+   ]
+  },
+  {
+   "id": "q04",
+   "kind": "exact",
+   "ask": "ORDERS_V2_DUAL_WRITE flag",
+   "wordings": [
+    "ORDERS_V2_DUAL_WRITE"
+   ],
+   "expect": [
+    "kb:services/orders-api.md",
+    "memory:shop-backend/handoff-2026-10-28.md"
+   ]
+  },
+  {
+   "id": "q05",
+   "kind": "exact",
+   "ask": "inventory_levels table",
+   "wordings": [
+    "inventory_levels"
+   ],
+   "expect": [
+    "kb:tables/inventory_levels.md"
+   ]
+  },
+  {
+   "id": "q06",
+   "kind": "exact",
+   "ask": "sessions table lifetime",
+   "wordings": [
+    "sessions table TTL",
+    "session lives days"
+   ],
+   "expect": [
+    "kb:tables/sessions.md"
+   ]
+  },
+  {
+   "id": "q07",
+   "kind": "exact",
+   "ask": "ORDERS_PAY_RETRIES",
+   "wordings": [],
+   "expect": [
+    "kb:runbooks/pay-504.md"
+   ]
+  },
+  {
+   "id": "q08",
+   "kind": "exact",
+   "ask": "outbox-janitor job",
+   "wordings": [
+    "outbox-janitor"
+   ],
+   "expect": [
+    "kb:incidents/2026-08-20-outbox-bloat.md",
+    "kb:tables/outbox_events.md"
+   ]
+  },
+  {
+   "id": "q09",
+   "kind": "exact",
+   "ask": "orders-db-replica promote",
+   "wordings": [
+    "pgctl promote"
+   ],
+   "expect": [
+    "kb:runbooks/db-failover.md"
+   ]
+  },
+  {
+   "id": "q10",
+   "kind": "partial",
+   "ask": "payment-gatway pool",
+   "wordings": [
+    "paymnt gateway connection pool"
+   ],
+   "expect": [
+    "kb:services/payment-gateway.md"
+   ]
+  },
+  {
+   "id": "q11",
+   "kind": "partial",
+   "ask": "order service retry",
+   "wordings": [
+    "OrderService retries",
+    "order service backoff"
+   ],
+   "expect": [
+    "kb:services/orders-api.md"
+   ]
+  },
+  {
+   "id": "q12",
+   "kind": "partial",
+   "ask": "inventory sweeper",
+   "wordings": [
+    "inventory-sweeper cron"
+   ],
+   "expect": [
+    "kb:services/inventory-service.md",
+    "kb:incidents/2026-06-15-oversell.md"
+   ]
+  },
+  {
+   "id": "q13",
+   "kind": "partial",
+   "ask": "outbox janitor failing",
+   "wordings": [
+    "outbox janitr"
+   ],
+   "expect": [
+    "kb:incidents/2026-08-20-outbox-bloat.md",
+    "kb:tables/outbox_events.md"
+   ]
+  },
+  {
+   "id": "q14",
+   "kind": "partial",
+   "ask": "paygw",
+   "wordings": [
+    "paygw config"
+   ],
+   "expect": [
+    "kb:services/payment-gateway.md"
+   ]
+  },
+  {
+   "id": "q15",
+   "kind": "partial",
+   "ask": "notifcation service owner",
+   "wordings": [
+    "notification-service owners pager"
+   ],
+   "expect": [
+    "kb:services/notification-service.md"
+   ]
+  },
+  {
+   "id": "q16",
+   "kind": "symptom",
+   "ask": "why do customers get errors when paying?",
+   "wordings": [
+    "payment errors checkout",
+    "/pay 504 timeout",
+    "payment-gateway errors"
+   ],
+   "expect": [
+    "kb:incidents/2026-10-12-checkout-504s.md",
+    "kb:services/payment-gateway.md",
+    "kb:runbooks/pay-504.md"
+   ]
+  },
+  {
+   "id": "q17",
+   "kind": "symptom",
+   "ask": "everyone got logged out this morning, why?",
+   "wordings": [
+    "users logged out",
+    "sessions invalidated",
+    "auth-service logout"
+   ],
+   "expect": [
+    "kb:incidents/2026-09-03-mass-logout.md"
+   ]
+  },
+  {
+   "id": "q18",
+   "kind": "symptom",
+   "ask": "the database disk is filling up",
+   "wordings": [
+    "database disk full",
+    "disk usage alarm primary",
+    "table bloat"
+   ],
+   "expect": [
+    "kb:incidents/2026-08-20-outbox-bloat.md"
+   ]
+  },
+  {
+   "id": "q19",
+   "kind": "symptom",
+   "ask": "a customer received the same email twice",
+   "wordings": [
+    "duplicate emails",
+    "notification sent twice",
+    "email idempotency"
+   ],
+   "expect": [
+    "kb:incidents/2026-07-02-duplicate-emails.md",
+    "kb:services/notification-service.md"
+   ]
+  },
+  {
+   "id": "q20",
+   "kind": "symptom",
+   "ask": "we sold items we don't have",
+   "wordings": [
+    "oversold stock",
+    "inventory oversell",
+    "sold out items still purchasable"
+   ],
+   "expect": [
+    "kb:incidents/2026-06-15-oversell.md"
+   ]
+  },
+  {
+   "id": "q21",
+   "kind": "symptom",
+   "ask": "search shows wrong prices after the import",
+   "wordings": [
+    "search stale prices",
+    "search-indexer lag",
+    "catalog import search"
+   ],
+   "expect": [
+    "kb:incidents/2026-05-04-stale-search.md",
+    "kb:services/search-indexer.md"
+   ]
+  },
+  {
+   "id": "q22",
+   "kind": "symptom",
+   "ask": "checkout hangs on the payment step",
+   "wordings": [
+    "checkout payment timeout",
+    "payment-gateway timeout",
+    "/pay slow"
+   ],
+   "expect": [
+    "kb:incidents/2026-10-12-checkout-504s.md",
+    "kb:services/payment-gateway.md",
+    "kb:runbooks/pay-504.md"
+   ]
+  },
+  {
+   "id": "q23",
+   "kind": "symptom",
+   "ask": "the month-end export locks orders",
+   "wordings": [
+    "lock timeout orders export",
+    "orders_v2 lock timeouts",
+    "finance export locks"
+   ],
+   "expect": [
+    "kb:tables/orders_v2.md"
+   ]
+  },
+  {
+   "id": "q24",
+   "kind": "symptom",
+   "ask": "the warehouse sync failed last night",
+   "wordings": [
+    "warehouse sync fails",
+    "nightly sync orders replica lag"
+   ],
+   "expect": [
+    "memory:data-platform/warehouse-sync.md"
+   ]
+  },
+  {
+   "id": "q25",
+   "kind": "symptom",
+   "ask": "refunds show the wrong cents",
+   "wordings": [
+    "refund rounding cents",
+    "money minor units"
+   ],
+   "expect": [
+    "kb:decisions/adr-007-minor-units.md",
+    "kb:tables/payments.md"
+   ]
+  },
+  {
+   "id": "q26",
+   "kind": "symptom",
+   "ask": "people can't verify tokens after the key change",
+   "wordings": [
+    "JWT verification fails after rotation",
+    "signing key rotation overlap"
+   ],
+   "expect": [
+    "kb:incidents/2026-09-03-mass-logout.md",
+    "kb:runbooks/rotate-jwt-keys.md",
+    "kb:services/auth-service.md"
+   ]
+  },
+  {
+   "id": "q27",
+   "kind": "symptom",
+   "ask": "stock reservations are released too early",
+   "wordings": [
+    "reservations expire early",
+    "inventory-sweeper clock"
+   ],
+   "expect": [
+    "kb:incidents/2026-06-15-oversell.md",
+    "kb:services/inventory-service.md"
+   ]
+  },
+  {
+   "id": "q28",
+   "kind": "conclusion",
+   "ask": "what fixed the October payment timeouts?",
+   "wordings": [
+    "payment timeouts fix",
+    "2026-10 timeouts",
+    "retry storm fix"
+   ],
+   "expect": [
+    "kb:incidents/2026-10-12-checkout-504s.md",
+    "kb:services/payment-gateway.md"
+   ]
+  },
+  {
+   "id": "q29",
+   "kind": "conclusion",
+   "ask": "did raising the connection pool help?",
+   "wordings": [
+    "raising pool did not help",
+    "PAYGW_POOL_SIZE raise"
+   ],
+   "expect": [
+    "kb:services/payment-gateway.md",
+    "kb:incidents/2026-10-12-checkout-504s.md",
+    "kb:runbooks/pay-504.md"
+   ]
+  },
+  {
+   "id": "q30",
+   "kind": "conclusion",
+   "ask": "why did the outbox janitor stop deleting rows?",
+   "wordings": [
+    "outbox-janitor failing cause",
+    "janitor permissions"
+   ],
+   "expect": [
+    "kb:incidents/2026-08-20-outbox-bloat.md"
+   ]
+  },
+  {
+   "id": "q31",
+   "kind": "conclusion",
+   "ask": "why is orders_v2 partitioned?",
+   "wordings": [
+    "orders_v2 partitioned by month reason",
+    "ADR orders_v2"
+   ],
+   "expect": [
+    "kb:decisions/adr-015-orders-v2-partitioning.md",
+    "kb:tables/orders_v2.md"
+   ]
+  },
+  {
+   "id": "q32",
+   "kind": "conclusion",
+   "ask": "why do we store amounts as integers?",
+   "wordings": [
+    "money integers minor units decision",
+    "ADR minor units"
+   ],
+   "expect": [
+    "kb:decisions/adr-007-minor-units.md"
+   ]
+  },
+  {
+   "id": "q33",
+   "kind": "conclusion",
+   "ask": "why was the oversell possible?",
+   "wordings": [
+    "oversell cause",
+    "inventory-sweeper clock fast"
+   ],
+   "expect": [
+    "kb:incidents/2026-06-15-oversell.md"
+   ]
+  },
+  {
+   "id": "q34",
+   "kind": "conclusion",
+   "ask": "what did we change after the duplicate emails?",
+   "wordings": [
+    "duplicate emails fix",
+    "idempotency key event id"
+   ],
+   "expect": [
+    "kb:incidents/2026-07-02-duplicate-emails.md",
+    "kb:services/notification-service.md"
+   ]
+  },
+  {
+   "id": "q35",
+   "kind": "conclusion",
+   "ask": "how long must the old signing key stay valid?",
+   "wordings": [
+    "old signing key overlap window",
+    "JWT key rotation overlap"
+   ],
+   "expect": [
+    "kb:runbooks/rotate-jwt-keys.md",
+    "kb:services/auth-service.md",
+    "kb:incidents/2026-09-03-mass-logout.md"
+   ]
+  },
+  {
+   "id": "q36",
+   "kind": "conclusion",
+   "ask": "why do we use a transactional outbox?",
+   "wordings": [
+    "transactional outbox reason",
+    "ADR outbox"
+   ],
+   "expect": [
+    "kb:decisions/adr-012-outbox-pattern.md"
+   ]
+  },
+  {
+   "id": "q37",
+   "kind": "other-group",
+   "ask": "when was staging refreshed from production?",
+   "wordings": [
+    "staging database refreshed",
+    "staging refresh production"
+   ],
+   "expect": [
+    "memory:shop-backend/handoff-2026-10-28.md"
+   ]
+  },
+  {
+   "id": "q38",
+   "kind": "other-group",
+   "ask": "can I force-push main?",
+   "wordings": [
+    "force-push main",
+    "force push release branch"
+   ],
+   "expect": [
+    "memory:shop-backend/no-force-push.md"
+   ]
+  },
+  {
+   "id": "q39",
+   "kind": "other-group",
+   "ask": "how do I rerun the warehouse sync?",
+   "wordings": [
+    "rerun warehouse sync command",
+    "dp sync orders"
+   ],
+   "expect": [
+    "memory:data-platform/warehouse-sync.md"
+   ]
+  },
+  {
+   "id": "q40",
+   "kind": "other-group",
+   "ask": "where are the revenue dbt models?",
+   "wordings": [
+    "revenue models dbt",
+    "analytics repo revenue"
+   ],
+   "expect": [
+    "memory:data-platform/dbt-models.md"
+   ]
+  },
+  {
+   "id": "q41",
+   "kind": "other-group",
+   "ask": "when does the mobile app ship?",
+   "wordings": [
+    "mobile release cadence",
+    "app store release train"
+   ],
+   "expect": [
+    "memory:mobile-app/release-train.md"
+   ]
+  },
+  {
+   "id": "q42",
+   "kind": "other-group",
+   "ask": "when can a mobile hotfix go out?",
+   "wordings": [
+    "mobile hotfix crash fix",
+    "release train missed fix"
+   ],
+   "expect": [
+    "memory:mobile-app/release-train.md"
+   ]
+  },
+  {
+   "id": "q43",
+   "kind": "other-group",
+   "ask": "how long do sunflower shoots soak?",
+   "wordings": [
+    "sunflower soak hours",
+    "microgreens soak"
+   ],
+   "expect": [
+    "garden:Microgreens.md"
+   ],
+   "groups": [
+    "garden"
+   ]
+  },
+  {
+   "id": "q44",
+   "kind": "frontmatter",
+   "ask": "who owns the payments table?",
+   "wordings": [
+    "payments table owner",
+    "owner payments"
+   ],
+   "expect": [
+    "kb:tables/payments.md",
+    "kb:services/payment-gateway.md"
+   ]
+  },
+  {
+   "id": "q45",
+   "kind": "frontmatter",
+   "ask": "which services does identity-team own?",
+   "wordings": [
+    "identity-team",
+    "owner identity-team"
+   ],
+   "expect": [
+    "kb:services/auth-service.md"
+   ]
+  },
+  {
+   "id": "q46",
+   "kind": "frontmatter",
+   "ask": "what does the platform-team own?",
+   "wordings": [
+    "platform-team owner"
+   ],
+   "expect": [
+    "kb:tables/outbox_events.md"
+   ]
+  },
+  {
+   "id": "q47",
+   "kind": "large-file",
+   "ask": "why did refunds stop being processed?",
+   "wordings": [
+    "refunds-worker stuck",
+    "refund_requests poison message"
+   ],
+   "expect": [
+    "kb:journal/ops-journal-2025.md"
+   ]
+  },
+  {
+   "id": "q48",
+   "kind": "large-file",
+   "ask": "the api-edge certificate expired",
+   "wordings": [
+    "TLS certificate expired api-edge",
+    "certificate renewal DNS"
+   ],
+   "expect": [
+    "kb:journal/ops-journal-2025.md"
+   ]
+  },
+  {
+   "id": "q49",
+   "kind": "large-file",
+   "ask": "product pages overloaded catalog-service during the sale",
+   "wordings": [
+    "cache stampede product pages",
+    "cache flush catalog-service"
+   ],
+   "expect": [
+    "kb:journal/ops-journal-2025.md"
+   ]
+  },
+  {
+   "id": "q50",
+   "kind": "current",
+   "ask": "how do I rotate the JWT signing keys?",
+   "wordings": [
+    "rotate JWT signing keys runbook"
+   ],
+   "expect": [
+    "kb:runbooks/rotate-jwt-keys.md"
+   ]
+  },
+  {
+   "id": "q51",
+   "kind": "current",
+   "ask": "which orders table does OrderService write?",
+   "wordings": [
+    "OrderService writes orders table"
+   ],
+   "expect": [
+    "kb:tables/orders_v2.md",
+    "kb:services/orders-api.md"
+   ]
+  },
+  {
+   "id": "q52",
+   "kind": "current",
+   "ask": "orders table columns",
+   "wordings": [
+    "orders table columns"
+   ],
+   "expect": [
+    "kb:tables/orders_v2.md"
+   ]
+  },
+  {
+   "id": "q53",
+   "kind": "current",
+   "ask": "steps to switch signing keys",
+   "wordings": [
+    "signing key switch steps"
+   ],
+   "expect": [
+    "kb:runbooks/rotate-jwt-keys.md"
+   ]
+  },
+  {
+   "id": "q54",
+   "kind": "current",
+   "ask": "who writes the orders table?",
+   "wordings": [
+    "orders table writer"
+   ],
+   "expect": [
+    "kb:tables/orders_v2.md",
+    "kb:services/orders-api.md"
+   ]
+  },
+  {
+   "id": "q55",
+   "kind": "current",
+   "ask": "how do I remove the old JWT key?",
+   "wordings": [
+    "remove old signing key"
+   ],
+   "expect": [
+    "kb:runbooks/rotate-jwt-keys.md"
+   ]
+  },
+  {
+   "id": "q56",
+   "kind": "none",
+   "ask": "how do we rotate kafka TLS certificates?",
+   "wordings": [
+    "kafka certificate rotation",
+    "kafka TLS"
+   ],
+   "expect": []
+  },
+  {
+   "id": "q57",
+   "kind": "none",
+   "ask": "what is the elasticsearch shard count?",
+   "wordings": [
+    "elasticsearch shards",
+    "search cluster shard count"
+   ],
+   "expect": []
+  },
+  {
+   "id": "q58",
+   "kind": "none",
+   "ask": "where is the terraform state bucket?",
+   "wordings": [
+    "terraform state",
+    "tfstate bucket"
+   ],
+   "expect": []
+  },
+  {
+   "id": "q59",
+   "kind": "none",
+   "ask": "graphql schema federation setup",
+   "wordings": [
+    "graphql federation",
+    "apollo gateway"
+   ],
+   "expect": []
+  },
+  {
+   "id": "q60",
+   "kind": "none",
+   "ask": "fish emulsion schedule",
+   "wordings": [
+    "fish emulsion tomatoes"
+   ],
+   "expect": []
+  },
+  {
+   "id": "q61",
+   "kind": "none",
+   "ask": "when is the PCI audit?",
+   "wordings": [
+    "PCI audit",
+    "compliance audit schedule"
+   ],
+   "expect": []
+  }
+ ]
+}

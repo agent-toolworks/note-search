@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+"""Benchmark at scale: build, update and search times against the design's limits.
+
+    scripts/bench [count ...]        default: 1000 10000
+
+Limits at 10,000 notes: search under 100 ms, update of 10 changed notes
+under 1 s, full build under 60 s. Exits 1 if one is missed.
+"""
+import json
+import os
+import shutil
+import statistics
+import sys
+import tempfile
+import time
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+from notesearch import config as cfglib  # noqa: E402
+from notesearch.gen import generate  # noqa: E402
+from notesearch.index import Index  # noqa: E402
+from notesearch.search import Searcher  # noqa: E402
+
+LIMITS = {"search_ms": 100, "update10_ms": 1000, "build_s": 60, "noop_update_ms": 300}
+QUERIES = [["connection pool lock"], ["svc-payment-12"], ["tbl_order_3 migration"],
+           ["certificate rotation", "key rotation token"], ["warehouse shipment delay"], ["zzzz nothing"],
+           ["kavor timeout"], ["why did the refund worker stop"]]
+# A worst case, reported but not held to the limit: two of the most common words
+# in the corpus, so ranking has to score a large share of all sections.
+COMMON = ["the retry", "timeout because"]
+
+
+def run(count: int) -> dict:
+    tmp = tempfile.mkdtemp(prefix="ns-bench-")
+    try:
+        paths = generate(os.path.join(tmp, "notes"), count)
+        size = sum(os.path.getsize(p) for p in paths)
+        cfgp = os.path.join(tmp, "ns.json")
+        with open(cfgp, "w") as fh:
+            json.dump({"groups": {"notes": {"dirs": ["notes/*"], "fields": {"title": "name", "entities": "service"}}},
+                       "cache_dir": os.path.join(tmp, "cache")}, fh)
+        os.environ.pop("NS_CACHE", None)
+        cfg = cfglib.load(cfgp)
+        t = time.time()
+        Index(cfg).update()
+        build = time.time() - t
+        t = time.time()
+        Index(cfg).update()
+        noop = (time.time() - t) * 1000
+        for p in paths[:10]:
+            with open(p, "a") as fh:
+                fh.write("\nAppended line about refunds.\n")
+            st = os.stat(p)
+            os.utime(p, ns=(st.st_atime_ns, st.st_mtime_ns + 2_000_000_000))
+        t = time.time()
+        Index(cfg).update()
+        upd = (time.time() - t) * 1000
+        idx = Index(cfg)
+        s = Searcher(idx.open(), cfg)
+        times = []
+        for _ in range(3):
+            for q in QUERIES:
+                t = time.time()
+                s.search(q, ["notes"])
+                times.append((time.time() - t) * 1000)
+        common = []
+        for q in COMMON:
+            t = time.time()
+            s.search([q], ["notes"])
+            common.append((time.time() - t) * 1000)
+        db = sum(os.path.getsize(idx.path + x) for x in ("", "-wal") if os.path.exists(idx.path + x))
+        return {"notes": count, "mb": round(size / 1e6, 1), "build_s": round(build, 1), "noop_update_ms": round(noop),
+                "update10_ms": round(upd), "search_ms_median": round(statistics.median(times), 1),
+                "search_ms": round(max(times), 1), "common_words_ms": round(max(common), 1),
+                "index_mb": round(db / 1e6, 1),
+                "index_per_mb_notes": round(db / size, 2)}
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def main():
+    counts = [int(a) for a in sys.argv[1:]] or [1000, 10000]
+    failed = False
+    for n in counts:
+        r = run(n)
+        print(json.dumps(r))
+        if n >= 10000:
+            for k, lim in LIMITS.items():
+                if r[k] > lim:
+                    print("LIMIT MISSED: %s %s > %s" % (k, r[k], lim))
+                    failed = True
+    sys.exit(1 if failed else 0)
+
+
+if __name__ == "__main__":
+    main()

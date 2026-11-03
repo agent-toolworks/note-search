@@ -1,0 +1,18 @@
+{
+  "default_groups": ["kb", "memory"],
+  "groups": {
+    "kb": {
+      "dirs": ["kb"],
+      "fields": {
+        "title": "name",
+        "aliases": "aka",
+        "entities": ["service", "tables"],
+        "date": "updated",
+        "status": {"field": "status", "stale": ["obsolete", "superseded"]},
+        "links": "related"
+      }
+    },
+    "memory": {"dirs": ["memory/*"]},
+    "garden": {"dirs": ["garden"]}
+  }
+}

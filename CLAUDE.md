@@ -15,5 +15,17 @@ Non-negotiables:
 - The search-quality question set gates every change: no kind may drop more
   than 5 points from the last release.
 
+Layout: `bin/ns` runs `notesearch/cli.py`; `notesearch/` holds the config,
+frontmatter reader, splitter, index, search, `ns get`, rendering, doctor and eval.
+Tests in `tests/` (unittest, standard library only):
+
+    python3 -m unittest discover -s tests -t .
+    NS_BENCH=1 python3 -m unittest tests.test_scale   # 10,000 notes, design limits
+    bin/ns eval fixtures/eval/questions.json --verbose --baseline fixtures/eval-baseline.json
+
+A change to ranking reruns the eval; refresh `fixtures/eval-baseline.json` with
+`--write-baseline` only when the change is meant to move the scores, and say so
+in the pull request.
+
 `VERSION` and `CHANGELOG.md`: one version for the project; add a line under
 Unreleased with every change.
