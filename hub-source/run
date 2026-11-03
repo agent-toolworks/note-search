@@ -1,0 +1,302 @@
+#!/usr/bin/env python3
+"""note-search's source for toolworks-hub (contract 4).
+
+The hub finds this folder inside the installed plugin and runs:
+
+  run detect                 whether ns is set up: config, SQLite features
+  run fetch <widget>         one widget from the search log (searchlog.py)
+  run fetch search --query   a search, the same route as `ns search`
+  run show session <id>      that session's searches and what it opened
+
+It reads the log and the index and changes nothing but the index, which a
+search updates as `ns search` does. Searches made from the hub page are not
+logged: the log measures agents' searches. Measures are in stats.py.
+"""
+import datetime as dt
+import json
+import os
+import sqlite3
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+
+from notesearch import __version__, stats, searchlog  # noqa: E402
+from notesearch import config as cfglib  # noqa: E402
+
+DAY = dt.timedelta(days=1)
+
+
+def out(value):
+    json.dump(value, sys.stdout, ensure_ascii=False)
+    sys.stdout.write("\n")
+
+
+def iso(t):
+    return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def now():
+    return dt.datetime.now(dt.timezone.utc)
+
+
+def load_config():
+    """(cfg, None) or (None, detect answer)."""
+    try:
+        return cfglib.load(None), None
+    except cfglib.ConfigError as exc:
+        path = os.environ.get("NS_CONFIG") or cfglib.DEFAULT_PATH
+        if any("does not exist" in p for p in exc.problems):
+            return None, {"state": "not_set_up", "reason": "no config file at %s" % path,
+                          "fix": "write %s naming your note folders (see the note-search README)" % path,
+                          "tool_version": __version__}
+        return None, {"state": "broken", "reason": "config %s: %s" % (path, exc.problems[0]),
+                      "fix": "ns config check", "tool_version": __version__}
+
+
+def detect():
+    try:
+        mem = sqlite3.connect(":memory:")
+        mem.execute("CREATE VIRTUAL TABLE t USING fts5(x, tokenize='trigram')")
+    except sqlite3.OperationalError:
+        return {"state": "broken",
+                "reason": "this python3's SQLite %s lacks full-text search with trigrams" % sqlite3.sqlite_version,
+                "fix": "use a python3 whose SQLite is 3.34 or newer (the macOS system python3)",
+                "tool_version": __version__}
+    cfg, answer = load_config()
+    if answer:
+        return answer
+    return {"state": "working", "tool_version": __version__}
+
+
+def linked(cfg):
+    entries, bad = searchlog.read(cfg.cache_dir)
+    searches, gets = stats.link(entries)
+    notice = []
+    if cfg.log == "off":
+        notice.append("the search log is off in %s" % cfg.path)
+    elif cfg.log == "counts":
+        notice.append("the log keeps counts only (\"log\": \"counts\"), not the words searched")
+    if bad:
+        notice.append("%d log line%s could not be read" % (bad, "" if bad == 1 else "s"))
+    return searches, gets, "; ".join(notice) or None
+
+
+def answer(kind, data, notice=None):
+    d = {"kind": kind, "data": data}
+    if notice:
+        d["notice"] = notice
+    return d
+
+
+def pct(v):
+    return "no data" if v is None else v
+
+
+def w_searches(cfg):
+    searches, gets, notice = linked(cfg)
+    m = stats.measures(searches, gets, now() - 7 * DAY)
+    return answer("stat", {"value": m["searches"], "unit": "searches",
+                           "label": "%d found nothing; %d sections opened" % (m["found_nothing"], m["gets"])}, notice)
+
+
+def w_open_rate(cfg):
+    searches, gets, notice = linked(cfg)
+    m = stats.measures(searches, gets, now() - 30 * DAY)
+    d = {"value": pct(m["open_rate"]), "label": "of searches with hits were followed by ns get of a hit, last 30 days"}
+    if m["open_rate"] is not None:
+        d["unit"] = "%"
+    return answer("stat", d, notice)
+
+
+def w_again_rate(cfg):
+    searches, gets, notice = linked(cfg)
+    m = stats.measures(searches, gets, now() - 30 * DAY)
+    d = {"value": pct(m["again_rate"]),
+         "label": "of searches were followed by another in the same session; target under %d%%, last 30 days"
+                  % stats.RESEARCH_TARGET}
+    if m["again_rate"] is not None:
+        d["unit"] = "%"
+    return answer("stat", d, notice)
+
+
+def w_per_day(cfg):
+    searches, _, notice = linked(cfg)
+    end = now().date()
+    start = end - dt.timedelta(days=89)
+    counts = stats.per_day(searches, dt.datetime.combine(start, dt.time(), dt.timezone.utc), end)
+    days = [start + dt.timedelta(days=i) for i in range(90)]
+    series = []
+    for g in sorted(counts):
+        series.append({"name": g, "points": [
+            {"t": iso(dt.datetime.combine(d, dt.time(), dt.timezone.utc)), "v": counts[g].get(d, 0)} for d in days]})
+    return answer("timeseries", {"unit": "searches", "series": series}, notice)
+
+
+def w_measures(cfg):
+    searches, gets, notice = linked(cfg)
+    a = stats.measures(searches, gets, now() - 7 * DAY)
+    b = stats.measures(searches, gets, now() - 30 * DAY)
+    rows = []
+
+    def row(name, key, target=None, fmt=None):
+        f = fmt or (lambda v: v)
+        rows.append({"measure": name, "week": None if a[key] is None else f(a[key]),
+                     "month": None if b[key] is None else f(b[key]), "target": target})
+    pc = lambda v: "%d%%" % v
+    row("Searches", "searches")
+    row("Found nothing", "found_nothing")
+    row("No strict match (partial matches only)", "no_strict")
+    row("Opened a hit (ns get)", "open_rate", None, pc)
+    row("Searched again within 2 minutes", "again_rate", "under %d%%" % stats.RESEARCH_TARGET, pc)
+    row("Opened hit was the first", "first_opened", None, pc)
+    row("Rank of the opened hit, median", "median_rank")
+    row("Tokens per search, median", "tokens_search", "under %d" % cfg.limits.answer_tokens)
+    row("Tokens per get, median", "tokens_get", "under %d" % cfg.limits.get_tokens)
+    row("Searches answered by relaxed matching", "relaxed")
+    row("…of which opened", "relaxed_open_rate", None, pc)
+    row("Searches that corrected a name", "names")
+    row("…of which opened", "names_open_rate", None, pc)
+    row("Search time, median ms", "median_ms")
+    return answer("table", {"columns": [
+        {"id": "measure", "title": "Measure"}, {"id": "week", "title": "Last 7 days"},
+        {"id": "month", "title": "Last 30 days"}, {"id": "target", "title": "Target"}], "rows": rows}, notice)
+
+
+def _session_cell(sid):
+    return {"ref": "session", "id": sid} if sid else None
+
+
+def w_no_match(cfg):
+    searches, _, notice = linked(cfg)
+    rows = []
+    for s in reversed(searches):
+        if s.strict:
+            continue
+        e = s.e
+        words = " | ".join(e["wordings"]) if e.get("wordings") else "(%s words, not logged)" % "+".join(
+            str(n) for n in e.get("words") or [])
+        rows.append({"time": iso(s.t), "words": words, "groups": ", ".join(e.get("groups") or []),
+                     "partial": s.found, "opened": "yes" if s.opened else "no", "session": _session_cell(e.get("session"))})
+        if len(rows) >= 50:
+            break
+    return answer("table", {"columns": [
+        {"id": "time", "title": "When"}, {"id": "words", "title": "Searched for"}, {"id": "groups", "title": "Groups"},
+        {"id": "partial", "title": "Partial matches"}, {"id": "opened", "title": "Opened"},
+        {"id": "session", "title": "Session"}], "rows": rows}, notice)
+
+
+def _note_counts(cfg):
+    path = os.path.join(cfg.cache_dir, "index.db")
+    if not os.path.exists(path):
+        return {}
+    try:
+        conn = sqlite3.connect("file:%s?mode=ro" % path, uri=True, timeout=2)
+        return dict(conn.execute("SELECT grp, count(*) FROM members GROUP BY grp").fetchall())
+    except sqlite3.Error:
+        return {}
+
+
+def w_groups(cfg):
+    searches, _, notice = linked(cfg)
+    since = now() - 30 * DAY
+    used = stats.by_group(searches, since)
+    notes = _note_counts(cfg)
+    rows = []
+    for gid, g in cfg.groups.items():
+        u = used.get(gid, {"searches": 0, "opened": 0, "last": None})
+        dirs, _ = g.resolve()
+        rows.append({"group": gid, "default": gid in cfg.group_ids(None), "folders": len(dirs),
+                     "notes": notes.get(gid), "searches": u["searches"], "opened": u["opened"],
+                     "last": iso(u["last"]) if u["last"] else "never",
+                     "flag": "not searched in 30 days" if not u["searches"] else None})
+    return answer("table", {"columns": [
+        {"id": "group", "title": "Group"}, {"id": "default", "title": "Searched by default"},
+        {"id": "folders", "title": "Folders"}, {"id": "notes", "title": "Notes"},
+        {"id": "searches", "title": "Searches, 30 days"}, {"id": "opened", "title": "Opened, 30 days"},
+        {"id": "last", "title": "Last searched"}, {"id": "flag", "title": "Note"}], "rows": rows}, notice)
+
+
+def w_search(cfg, query):
+    from notesearch.index import Index
+    from notesearch.search import Searcher
+    query = (query or "").strip()
+    if not query:
+        return answer("search", {"results": []})
+    idx = Index(cfg)
+    report = idx.update()
+    conn = idx.open()
+    res = Searcher(conn, cfg).search([query], cfg.group_ids(None))
+    results = []
+    for n in res.notes[:20]:
+        d = n.as_dict()
+        r = {"title": d.get("title") or n.ref, "location": n.section_ref,
+             "evidence": "strict" if n.stage == "strict" else n.stage}
+        if d.get("snippet"):
+            r["detail"] = d["snippet"]
+        results.append(r)
+    notes = list(report.warnings) if report else []
+    if not res.strict_found and res.notes:
+        notes.insert(0, "no note has every word; these match some of them")
+    return answer("search", {"results": results}, "; ".join(notes) or None)
+
+
+WIDGETS = {"searches": w_searches, "open-rate": w_open_rate, "again-rate": w_again_rate, "per-day": w_per_day,
+           "measures": w_measures, "no-match": w_no_match, "groups": w_groups}
+
+
+def show_session(cfg, sid):
+    searches, gets, _ = linked(cfg)
+    mine = [s for s in searches if s.session == sid]
+    if not mine and not any(g.get("session") == sid for g in gets):
+        return {"widgets": []}
+    rows = []
+    for s in mine:
+        e = s.e
+        rows.append({"time": iso(s.t), "words": " | ".join(e["wordings"]) if e.get("wordings") else "(not logged)",
+                     "found": s.found, "match": "strict" if s.strict else ("partial" if s.found else "none"),
+                     "opened": ", ".join(g.get("ref") for g in s.gets) or None,
+                     "rank": min(s.ranks) if s.ranks else None, "tokens": e.get("tokens")})
+    m = stats.measures(mine, [g for g in gets if g.get("session") == sid], dt.datetime.min.replace(tzinfo=dt.timezone.utc))
+    return {"widgets": [
+        {"id": "session-searches", "kind": "stat", "title": "note-search in this session",
+         "data": {"value": len(mine), "unit": "searches",
+                  "label": "%d sections opened; %d found nothing" % (m["gets"], m["found_nothing"])}},
+        {"id": "session-table", "kind": "table", "title": "Searches",
+         "data": {"columns": [
+             {"id": "time", "title": "When"}, {"id": "words", "title": "Searched for"},
+             {"id": "found", "title": "Notes"}, {"id": "match", "title": "Match"},
+             {"id": "opened", "title": "Opened"}, {"id": "rank", "title": "Rank opened"},
+             {"id": "tokens", "title": "Tokens"}], "rows": rows}}]}
+
+
+def main(argv):
+    if not argv:
+        sys.stderr.write("usage: run detect | fetch <widget> [--query text] | show session <id>\n")
+        return 2
+    if argv[0] == "detect":
+        out(detect())
+        return 0
+    cfg, problem = load_config()
+    if problem:
+        sys.stderr.write(problem["reason"] + "\n")
+        return 1
+    if argv[0] == "fetch" and len(argv) >= 2:
+        if argv[1] == "search":
+            q = argv[argv.index("--query") + 1] if "--query" in argv[2:-1] else ""
+            out(w_search(cfg, q))
+            return 0
+        if argv[1] in WIDGETS:
+            out(WIDGETS[argv[1]](cfg))
+            return 0
+        sys.stderr.write("unknown widget %s\n" % argv[1])
+        return 2
+    if argv[0] == "show" and len(argv) == 3 and argv[1] == "session":
+        out(show_session(cfg, argv[2].lower()))
+        return 0
+    sys.stderr.write("unknown command: %s\n" % " ".join(argv))
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

@@ -16,8 +16,12 @@ Non-negotiables:
   than 5 points from the last release.
 
 Layout: `bin/ns` runs `notesearch/cli.py`; `notesearch/` holds the config,
-frontmatter reader, splitter, index, search, `ns get`, rendering, doctor and eval.
-Tests in `tests/` (unittest, standard library only):
+frontmatter reader, splitter, index, search, `ns get`, rendering, doctor and eval,
+plus `searchlog.py` (the search log) and `stats.py` (measures read from it).
+`hub-source/` is the toolworks-hub source (contract 4); `skills/note-search/` and
+`.claude-plugin/` make the Claude Code plugin. The skill's description is loaded
+in every session: keep it near 100 tokens. Tests in `tests/` (unittest, standard
+library only):
 
     python3 -m unittest discover -s tests -t .
     NS_BENCH=1 python3 -m unittest tests.test_scale   # 10,000 notes, design limits
@@ -28,4 +32,10 @@ A change to ranking reruns the eval; refresh `fixtures/eval-baseline.json` with
 in the pull request.
 
 `VERSION` and `CHANGELOG.md`: one version for the project; add a line under
-Unreleased with every change.
+Unreleased with every change. A release sets the same version in `VERSION`,
+`.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` and
+`hub-source/source.json` (a test checks they agree).
+
+A change to the log's fields changes `searchlog.VERSION` and the hub source in
+the same change; `tests/test_hub.py` runs the hub's `check-source` when a
+toolworks-hub clone is found (`TOOLWORKS_HUB_REPO`, else `~/git/home/toolworks-hub`).

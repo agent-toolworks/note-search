@@ -214,3 +214,25 @@ class Commands(Tree):
         code, out, err = self.ns("search", "alpha", "--no-update")
         self.assertEqual(code, 1)
         self.assertIn("no index yet", err)
+
+
+class Arguments(Tree):
+    def setUp(self):
+        super().setUp()
+        self.config({"kb": {"dirs": ["kb"]}, "mem": {"dirs": ["mem"]}})
+        self.write("kb/pool.md", "---\nservice: payments\n---\n# Pool\nThe connection pool ran out.\n")
+        self.write("mem/pool.md", "# Pool\nThe connection pool in memory.\n")
+
+    def test_words_after_an_option(self):
+        code, data = self.ns_json("search", "connection", "--group", "kb", "pool", "service=payments")
+        self.assertEqual(code, 0)
+        self.assertEqual(data["query"]["wordings"], ["connection", "pool"])
+        self.assertEqual(data["query"]["filters"], {"service": "payments"})
+        self.assertEqual([n["ref"] for n in data["notes"]], ["kb:pool.md"])
+
+    def test_unknown_option_is_still_an_error(self):
+        with self.assertRaises(SystemExit) as cm:
+            self.ns("search", "pool", "--colour", "red")
+        self.assertEqual(cm.exception.code, 2)
+        with self.assertRaises(SystemExit):
+            self.ns("get", "kb:pool.md", "extra")

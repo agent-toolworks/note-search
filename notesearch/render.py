@@ -43,8 +43,8 @@ def note_lines(i: int, note) -> list:
     return lines
 
 
-def search_text(res, budget: int, offset: int, related) -> tuple:
-    """(text, number of notes shown)."""
+def search_text(res, budget: int, offset: int, related, q: str = "") -> tuple:
+    """(text, number of notes shown). `q`, the query id, goes at the end of the first line."""
     notes = res.notes[offset:]
     by_group = Counter(n.grp for n in res.notes)
     groups = ", ".join("%s %d" % (g, by_group[g]) for g in res.groups if by_group[g])
@@ -53,12 +53,12 @@ def search_text(res, budget: int, offset: int, related) -> tuple:
         msg = "no notes match in %s" % ", ".join(res.groups)
         if res.nearest:
             msg += "; nearest names: " + ", ".join(res.nearest)
-        out.append(msg)
+        out.append(msg + (" · q %s" % q if q else ""))
     else:
         head = "%d notes (%s) · %s · %d wording%s · %d ms" % (
             len(res.notes), groups, "+".join(res.stages) or "-", len(res.wordings),
             "" if len(res.wordings) == 1 else "s", res.ms)
-        out.append(head)
+        out.append(head + (" · q %s" % q if q else ""))
         if not res.strict_found:
             out.append("no strict match; partial matches only" +
                        ("; nearest names: " + ", ".join(res.nearest) if res.nearest else ""))

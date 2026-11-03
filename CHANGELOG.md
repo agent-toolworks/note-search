@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 0.2.0 - 2026-11-03
+
+- Claude Code plugin: the `note-search` skill tells agents when to search, to
+  send several wordings at once and to open sections with `ns get`. Install it
+  from this repository (`.claude-plugin/marketplace.json`).
+- The search log, `searches.jsonl` beside the index: one line per search and
+  per `ns get`, with the Claude Code session that ran it
+  (`CLAUDE_CODE_SESSION_ID`). Queries and references only, never note text;
+  `"log": "counts"` drops the words, `"off"` writes nothing. Mode 600, rotated
+  at 10 MB, read back 90 days.
+- A search prints its query id (`· q 3f9a1c2e`); `ns get --q <id>` ties the
+  get to it. `--json` answers carry it as `q`.
+- `hub-source/` for toolworks-hub (contract 4): searches per day by group, the
+  share of searches whose hit was opened, searches made again within 2
+  minutes, the rank of the opened hit, tokens, searches with no strict match
+  and their words, groups not searched in 30 days, a search box, and a section
+  on each Claude Code session's page.
+
 ## 0.1.0 - 2026-11-02
 
 - Phase 1, the read-only search: the `ns` command (`search`, `get`, `related`,

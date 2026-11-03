@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "note-search",
+  "description": "Cross-project search over folders of Markdown notes, for AI agents",
+  "owner": {
+    "name": "Zvi Rahamim"
+  },
+  "plugins": [
+    {
+      "name": "note-search",
+      "description": "Search folders of Markdown notes across projects (Claude Code memory, a knowledge base, a notes vault) in one call, for a few hundred tokens. Read-only; no AI model, no network: python3 and SQLite full-text search.",
+      "version": "0.2.0",
+      "author": {
+        "name": "Zvi Rahamim"
+      },
+      "category": "productivity",
+      "source": "./",
+      "homepage": "https://github.com/agent-toolworks/note-search"
+    }
+  ]
+}

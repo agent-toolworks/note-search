@@ -10,7 +10,7 @@ import sys
 
 from . import __version__
 from . import config as cfglib
-from . import refs, render
+from . import refs, render, searchlog
 from .index import Index, NotReady
 from .search import Searcher
 
@@ -67,12 +67,21 @@ def cmd_search(args):
     res = s.search(wordings, groups, filters, args.since)
     res.warnings = _warnings(report) + res.warnings
     related = lambda n: s.related(n.file_id, groups, 2)
+    q = searchlog.new_id()
+    query = {"wordings": res.wordings, "groups": groups, "filters": filters, "since": args.since}
     if args.json:
-        query = {"wordings": res.wordings, "groups": groups, "filters": filters, "since": args.since}
-        _emit(args, data=render.search_json(res, args.offset, args.limit, related, query))
+        data = render.search_json(res, args.offset, args.limit, related, query)
+        data["q"] = q
+        shown = [n["ref"] for n in data["notes"]]
+        _emit(args, data=data)
+        cost = render.tokens(json.dumps(data, ensure_ascii=False))
     else:
-        text, _ = render.search_text(res, cfg.limits.answer_tokens, args.offset, related)
+        text, n = render.search_text(res, cfg.limits.answer_tokens, args.offset, related, q)
+        shown = [x.ref for x in res.notes[args.offset:args.offset + n]]
         _emit(args, text)
+        cost = render.tokens(text)
+    searchlog.write(cfg, searchlog.search_entry(
+        cfg, q, res, query, shown, args.offset, cost, res.ms, len(res.warnings)))
 
 
 def cmd_get(args):
@@ -84,8 +93,14 @@ def cmd_get(args):
         d["ok"] = True
         d["warnings"] = warns
         _emit(args, data=d)
+        cost = render.tokens(json.dumps(d, ensure_ascii=False))
     else:
-        _emit(args, render.get_text(got, warns))
+        text = render.get_text(got, warns)
+        _emit(args, text)
+        cost = render.tokens(text)
+    r = refs.parse(got.ref)
+    q = args.q if args.q and re.match(r"^[0-9a-f]{8}$", args.q) else None
+    searchlog.write(cfg, searchlog.get_entry(cfg, q, got.ref, "%s:%s" % (r.grp, r.rel), cost, bool(got.cut_at)))
 
 
 def cmd_related(args):
@@ -238,6 +253,7 @@ def build_parser():
 
     g = sub.add_parser("get", parents=[common], help="one section or line range of a note")
     g.add_argument("ref", help="group:path, group:path#Heading or group:path:L10-40")
+    g.add_argument("--q", help="the query id the search printed (q ...), so the log ties this get to it")
     g.set_defaults(func=cmd_get)
 
     r = sub.add_parser("related", parents=[common], help="notes linked to or sharing entities with a note")
@@ -275,7 +291,13 @@ def build_parser():
 
 def main(argv=None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args, extra = parser.parse_known_args(argv)
+    if extra:
+        # `ns search a --group kb b`: words after an option are wordings too
+        if getattr(args, "cmd", None) == "search" and not any(x.startswith("-") for x in extra):
+            args.words += extra
+        else:
+            parser.error("unrecognized arguments: %s" % " ".join(extra))
     if not args.cmd:
         parser.print_help()
         return 2

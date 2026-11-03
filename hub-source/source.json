@@ -1,0 +1,20 @@
+{
+  "contract": 4,
+  "name": "note-search",
+  "title": "note-search",
+  "version": "0.2.0",
+  "network": false,
+  "refresh_seconds": 300,
+  "timeout_seconds": 20,
+  "widgets": [
+    {"id": "searches", "kind": "stat", "title": "Searches, last 7 days"},
+    {"id": "open-rate", "kind": "stat", "title": "Searches whose hit was opened"},
+    {"id": "again-rate", "kind": "stat", "title": "Searched again within 2 minutes"},
+    {"id": "per-day", "kind": "timeseries", "title": "Searches per day, by group", "ranges": ["30d", "7d", "90d"]},
+    {"id": "measures", "kind": "table", "title": "Did searches work?"},
+    {"id": "no-match", "kind": "table", "title": "Searches with no strict match"},
+    {"id": "groups", "kind": "table", "title": "Groups"},
+    {"id": "search", "kind": "search", "title": "Search the notes", "example_query": "release"}
+  ],
+  "shows": ["session"]
+}
