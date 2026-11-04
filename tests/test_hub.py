@@ -132,6 +132,66 @@ class Source(Env):
         self.assertEqual(self.log(), [])
         self.assertEqual(self.run_source("fetch", "search")["data"]["results"], [])
 
+    # ---- the view's calls (page/) --------------------------------------------
+    def test_view_page_is_declared_and_shipped(self):
+        self.assertEqual(self.manifest["page"], "page/index.html")
+        page = os.path.join(ROOT, "hub-source", "page")
+        for f in ("index.html", "view.js", "view.css", "md.js"):
+            self.assertTrue(os.path.isfile(os.path.join(page, f)), f)
+        with open(os.path.join(page, "index.html")) as fh:
+            html = fh.read()
+        # The hub's Content-Security-Policy is default-src 'self': nothing inline, nothing remote.
+        self.assertNotRegex(html, r"<script>|<style>| style=|https?://")
+
+    def test_call_search(self):
+        d = self.run_source("call", "search", json.dumps({"q": "connection pool | zebrafinch"}))
+        self.assertEqual(d["notes"][0]["ref"], "kb:pool.md")
+        self.assertEqual(d["notes"][0]["section"], "kb:pool.md#Pool")
+        self.assertEqual(d["searched"], ["kb"])
+        self.assertEqual(d["groups"], ["kb"])
+        self.assertEqual(self.log(), [], "a person searching on the page is not an agent's search")
+        empty = self.run_source("call", "search", "{}")
+        self.assertEqual((empty["notes"], empty["groups"]), ([], ["kb"]))
+
+    def test_call_notes_and_note(self):
+        d = self.run_source("call", "notes", "{}")
+        self.assertEqual(sorted(n["ref"] for n in d["notes"]), ["kb:orders.md", "kb:pool.md"])
+        pool = [n for n in d["notes"] if n["ref"] == "kb:pool.md"][0]
+        self.assertEqual((pool["title"], pool["stem"], pool["sections"]), ("Payment gateway", "pool", 2))
+        self.write("kb/fm.md", "---\ntitle: With header\ntags: [a, b]\n---\n# Body\ntext <script>x</script>\n")
+        n = self.run_source("call", "note", json.dumps({"ref": "kb:fm.md#Body"}))
+        self.assertTrue(n["ok"])
+        self.assertEqual(n["heading"], "Body")
+        self.assertEqual(n["frontmatter"], {"title": "With header", "tags": ["a", "b"]})
+        self.assertEqual(n["body"], "# Body\ntext <script>x</script>\n")
+        self.assertEqual(n["body_line"], 5)
+        self.assertEqual(n["path"], os.path.realpath(self.path("kb/fm.md")))
+
+    def test_call_note_reads_only_indexed_notes(self):
+        self.write("secret.md", "not in any group\n")
+        for ref in ("kb:../secret.md", "kb:nope.md", "other:pool.md"):
+            d = self.run_source("call", "note", json.dumps({"ref": ref}))
+            self.assertFalse(d["ok"], ref)
+            self.assertNotIn("not in any group", json.dumps(d))
+
+    def test_call_measures_and_bad_input(self):
+        d = self.run_source("call", "measures", "{}")
+        self.assertEqual([w["id"] for w in d["widgets"]],
+                         [w["id"] for w in self.manifest["widgets"] if w["kind"] != "search"])
+        for w in d["widgets"]:
+            check_shape(self, w["kind"], w["data"])
+        p = self.run_source("call", "search", "{not json", ok=False)
+        self.assertEqual(p.returncode, 2)
+        p = self.run_source("call", "nope", "{}", ok=False)
+        self.assertEqual(p.returncode, 2)
+
+    def test_markdown_renderer(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node is not installed; the reader's renderer is tested with it")
+        p = subprocess.run([node, os.path.join(ROOT, "tests", "md_test.js")], capture_output=True, text=True, timeout=60)
+        self.assertEqual(p.returncode, 0, p.stderr + p.stdout)
+
     def test_show_session(self):
         self.assertEqual(self.run_source("show", "session", SID), {"widgets": []})
         self.ns("search", "connection pool")

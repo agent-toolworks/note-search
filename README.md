@@ -87,12 +87,28 @@ A search prints a query id at the end of its first line (`· q 3f9a1c2e`);
 latest search in the same session that returned that note.
 
 With the plugin installed, toolworks-hub finds `hub-source/` and shows a
-note-search tab: searches per day by group; the share of searches whose hit
-was opened; how often a search was made again within 2 minutes in the same
-session (the first one failed; target under 20%); the rank of the opened
-hit; tokens per search and per get; searches with no strict match, with their
-words; groups not searched in 30 days; and a search box. Each Claude Code
-session's page in the hub gets a note-search section listing its searches.
+note-search tab with its own page (`hub-source/page/`), in three tabs:
+
+- **Search**: a search box over the groups you tick (the default groups
+  first; opt-in groups marked). Several wordings go in one search,
+  separated by `|`. Searches made here are not logged: the log measures agents.
+- **Measures**: searches per day by group; the share of searches whose hit
+  was opened; how often a search was made again within 2 minutes in the same
+  session (the first one failed; target under 20%); the rank of the opened
+  hit; tokens per search and per get; searches with no strict match, with
+  their words; groups not searched in 30 days.
+- **Notes**: every indexed note in a table, filtered by text or group and
+  sorted by any column, with STALE and superseded notes marked.
+
+A note clicked in the search results or the table opens on the right,
+rendered from its Markdown: frontmatter as a table of properties, a list of
+its headings, and the hit's section scrolled into view with the searched
+words marked. Wiki links (`[[note]]`) and relative links to other notes open
+in the same pane. The page only ever reads notes the index holds, and builds
+the page itself: HTML in a note is shown as text, never run.
+
+Each Claude Code session's page in the hub gets a note-search section listing
+its searches.
 
 A wildcard folder is named in results by the part that varies, shortened: with
 `~/.claude*/projects/*/memory`, the project folder `-Users-me-git-home-agent-teller`
