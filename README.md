@@ -25,15 +25,23 @@ source, and adding notes (`ns add`) to a group that allows it.
 
 ## Install
 
-In Claude Code:
+From the agent-toolworks catalogue, with the other tools
+([start here](https://github.com/agent-toolworks/plugins)):
 
-```
-/plugin install note-search --marketplace agent-toolworks/note-search
+```sh
+claude plugin marketplace add agent-toolworks/plugins
+claude plugin install note-search@agent-toolworks
 ```
 
-The skill tells agents when to search and how. Then write the config below;
-`ns doctor` says what is missing. Without Claude Code, clone the repo and run
-`bin/ns`.
+Restart Claude Code, or run `/reload-plugins`, then ask Claude to "set up
+note-search": `ns doctor` says what is missing, and the config is below.
+toolworks-hub (`toolworks-hub@agent-toolworks`, then `/hub`) shows note-search's
+search, notes and measures in the browser.
+
+This repo is also its own marketplace, if you want only this plugin:
+`claude plugin marketplace add agent-toolworks/note-search`, then
+`claude plugin install note-search@note-search`. Without Claude Code, clone the
+repo and run `bin/ns`.
 
 ## Try it
 
