@@ -9,7 +9,7 @@
     {
       "name": "note-search",
       "description": "Search folders of Markdown notes across projects (Claude Code memory, a knowledge base, a notes vault) in one call, for a few hundred tokens. Read-only; no AI model, no network: python3 and SQLite full-text search.",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "author": {
         "name": "Zvi Rahamim"
       },

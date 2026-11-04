@@ -142,7 +142,8 @@ def cmd_groups(args):
     for gid, g in cfg.groups.items():
         dirs, warns = g.resolve()
         data.append({"id": gid, "dirs": [d.path for d in dirs], "patterns": g.dirs, "notes": counts.get(gid, 0),
-                     "default": gid in (cfg.default_groups or cfg.groups), "warnings": warns})
+                     "default": gid in (cfg.default_groups or cfg.groups), "write": g.write or None,
+                     "warnings": warns})
     if args.json:
         _emit(args, data={"ok": True, "groups": data, "updated": float(updated[0]) if updated else None})
         return
@@ -152,6 +153,8 @@ def cmd_groups(args):
                                            d["notes"], ", ".join(d["patterns"])))
         if len(d["dirs"]) > 1 or d["dirs"] != d["patterns"]:
             out.append("  %d folders" % len(d["dirs"]))
+        if d["write"]:
+            out.append("  ns add writes to " + d["write"])
         out.extend("  warning: " + w for w in d["warnings"])
     _emit(args, "\n".join(out))
 
@@ -208,7 +211,8 @@ def cmd_config(args):
     for gid, g in cfg.groups.items():
         dirs, warns = g.resolve()
         data["groups"][gid] = {"dirs": [{"path": d.path, "prefix": d.prefix} for d in dirs], "warnings": warns,
-                               "roles": {k: v for k, v in g.roles.__dict__.items() if v}}
+                               "roles": {k: v for k, v in g.roles.__dict__.items() if v},
+                               "write": g.write or None}
         out.append("%s: %d folder%s" % (gid, len(dirs), "" if len(dirs) == 1 else "s"))
         for d in dirs[:10]:
             out.append("  %s%s" % (d.path, ("  as " + d.prefix) if d.prefix else ""))
@@ -217,7 +221,52 @@ def cmd_config(args):
         out.extend("  warning: " + w for w in warns)
         roles = ", ".join("%s=%s" % (k, "/".join(v)) for k, v in g.roles.__dict__.items() if v)
         out.append("  fields: " + roles)
+        out.append("  ns add writes to " + g.write if g.write else "  read-only (no write folder)")
     _emit(args, "\n".join(out), data)
+
+
+def cmd_add(args):
+    from . import add as addlib
+    if args.append and (args.group or args.title or args.entities or args.tags or args.source
+                        or args.new or args.supersedes):
+        raise UsageError("--append takes only the note's reference and the text on standard input")
+    if not args.append and not args.group:
+        raise UsageError("give the --group to add the note to")
+    if args.new and args.supersedes:
+        raise UsageError("--new and --supersedes contradict each other: pick one")
+    if sys.stdin.isatty():
+        raise UsageError("the note's text comes on standard input: ns add ... < note.md")
+    body = sys.stdin.read()
+    cfg, idx, conn, report = _open(args)
+    split = lambda v: [x for x in (v or "").split(",") if x.strip()]
+    try:
+        if args.append:
+            data = addlib.append(cfg, conn, args.append, body)
+        else:
+            data = addlib.add(cfg, conn, args.group, args.title, body, entities=split(args.entities),
+                              tags=split(args.tags), source=args.source, new=args.new, supersedes=args.supersedes)
+    except addlib.Refused as exc:
+        data = dict(exc.data, ok=False, written=False, error=[str(exc)])
+        if args.json:
+            _emit(args, data=data)
+        else:
+            out = ["ns: " + str(exc)]
+            for d in data.get("duplicates", []):
+                out.append("  %s  \"%s\"  (%s)" % (d["ref"], d["title"], d["why"]))
+            if data.get("duplicates"):
+                out.append("pass --new if yours is a different note, or --supersedes <ref> if it replaces one; "
+                           "nothing was written")
+            sys.stderr.write("\n".join(out) + "\n")
+        return exc.code
+    finally:
+        idx.close()
+    data["warnings"] = _warnings(report) + data["warnings"]
+    verb = "appended to" if data.get("appended") else "added"
+    text = "%s %s" % (verb, data["ref"])
+    if data.get("supersedes"):
+        text += "\nsupersedes %s (left as it is; its hits now point here)" % data["supersedes"]
+    text += "".join("\nwarning: " + w for w in data["warnings"])
+    _emit(args, text, data)
 
 
 def cmd_doctor(args):
@@ -266,6 +315,20 @@ def build_parser():
     f = sub.add_parser("fields", parents=[common], help="frontmatter fields used in a group")
     f.add_argument("group")
     f.set_defaults(func=cmd_fields)
+
+    a = sub.add_parser("add", parents=[common], help="add a note to a group that allows writing (text on stdin)",
+                       description="Create a note in the group's write folder. The text comes on standard "
+                                   "input and needs an Observed or a Concluded heading. Exit 3: close matches "
+                                   "exist and nothing was written.")
+    a.add_argument("--group", help="the group to add the note to; it must name a write folder")
+    a.add_argument("--title", help="the note's title")
+    a.add_argument("--entities", help="services, tables and other names it is about, comma-separated")
+    a.add_argument("--tags", help="tags, comma-separated")
+    a.add_argument("--source", help="where it came from: a ticket, an incident, a pull request")
+    a.add_argument("--new", action="store_true", help="write it even though close matches exist: it is a different note")
+    a.add_argument("--supersedes", metavar="REF", help="the note this one replaces; that note is left as it is")
+    a.add_argument("--append", metavar="REF", help="add the text to a note ns created, under a dated heading")
+    a.set_defaults(func=cmd_add)
 
     d = sub.add_parser("doctor", parents=[common], help="check the setup and the index; each problem with its fix")
     d.add_argument("--secrets", action="store_true", help="also look for text that looks like credentials")

@@ -17,7 +17,8 @@ Non-negotiables:
 
 Layout: `bin/ns` runs `notesearch/cli.py`; `notesearch/` holds the config,
 frontmatter reader, splitter, index, search, `ns get`, rendering, doctor and eval,
-plus `searchlog.py` (the search log) and `stats.py` (measures read from it).
+plus `searchlog.py` (the search log), `stats.py` (measures read from it) and
+`add.py` (`ns add`, the only code that writes into a group's folders).
 `hub-source/` is the toolworks-hub source (contract 4); `skills/note-search/` and
 `.claude-plugin/` make the Claude Code plugin. The skill's description is loaded
 in every session: keep it near 100 tokens. Tests in `tests/` (unittest, standard
