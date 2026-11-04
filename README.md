@@ -25,11 +25,16 @@ source, and adding notes (`ns add`) to a group that allows it.
 
 ## Install
 
-In Claude Code:
+From a terminal (the repo is private: your GitHub account needs access to
+agent-toolworks):
 
+```sh
+claude plugin marketplace add agent-toolworks/note-search
+claude plugin install note-search@note-search
 ```
-/plugin install note-search --marketplace agent-toolworks/note-search
-```
+
+or the same inside Claude Code with `/plugin marketplace add …` and
+`/plugin install …`, then restart Claude Code or run `/reload-plugins`.
 
 The skill tells agents when to search and how. Then write the config below;
 `ns doctor` says what is missing. Without Claude Code, clone the repo and run
