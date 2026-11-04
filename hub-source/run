@@ -7,6 +7,8 @@ The hub finds this folder inside the installed plugin and runs:
   run fetch <widget>         one widget from the search log (searchlog.py)
   run fetch search --query   a search, the same route as `ns search`
   run show session <id>      that session's searches and what it opened
+  run call <op> <json>       the view's questions (page/): search, notes, note,
+                             measures
 
 It reads the log and the index and changes nothing but the index, which a
 search updates as `ns search` does. Searches made from the hub page are not
@@ -69,7 +71,17 @@ def detect():
     return {"state": "working", "tool_version": __version__}
 
 
+_LINKED = {}
+
+
 def linked(cfg):
+    if id(cfg) in _LINKED:
+        return _LINKED[id(cfg)]
+    _LINKED[id(cfg)] = _linked(cfg)
+    return _LINKED[id(cfg)]
+
+
+def _linked(cfg):
     entries, bad = searchlog.read(cfg.cache_dir)
     searches, gets = stats.link(entries)
     notice = []
@@ -270,6 +282,126 @@ def show_session(cfg, sid):
              {"id": "tokens", "title": "Tokens"}], "rows": rows}}]}
 
 
+# ---- the view's calls (page/) ------------------------------------------------
+# The view asks through the hub: /api/sources/note-search/call/<op>?args=<json>.
+# Each answers one JSON object. Like `fetch search`, nothing here is logged: the
+# log measures agents' searches, not a person browsing.
+
+MAX_NOTE_BYTES = 2 * 1024 * 1024
+
+
+def _index(cfg):
+    from notesearch.index import Index
+    idx = Index(cfg)
+    report = idx.update()
+    return idx, idx.open(), report
+
+
+def _groups_info(cfg):
+    return {"groups": list(cfg.groups), "default": cfg.group_ids(None), "version": __version__}
+
+
+def c_search(cfg, args):
+    from notesearch.search import Searcher
+    q = str(args.get("q") or "").strip()
+    wordings = [w.strip() for w in q.split("|") if w.strip()][:5]
+    wanted = [g for g in (args.get("groups") or []) if g in cfg.groups]
+    groups = wanted or cfg.group_ids(None)
+    d = dict(_groups_info(cfg), searched=groups, notes=[], strict_found=True, nearest=[], warnings=[])
+    if not wordings:
+        return d
+    idx, conn, report = _index(cfg)
+    try:
+        s = Searcher(conn, cfg)
+        res = s.search(wordings, groups)
+        notes = []
+        for n in res.notes[:50]:
+            n.related = s.related(n.file_id, groups, 3)
+            notes.append(n.as_dict())
+        d.update(notes=notes, total=len(res.notes), strict_found=res.strict_found, nearest=res.nearest,
+                 stages=res.stages, ms=res.ms, warnings=(list(report.warnings) if report else []) + res.warnings)
+    finally:
+        idx.close()
+    return d
+
+
+def c_notes(cfg, args):
+    idx, conn, report = _index(cfg)
+    try:
+        rows = conn.execute(
+            "SELECT m.grp, m.rel, f.title, f.date, f.date_src, f.status, f.stale, f.entities, f.size, f.pieces, "
+            "f.supersedes, f.stem FROM members m JOIN files f ON f.id = m.file_id ORDER BY m.grp, m.rel").fetchall()
+        superseded = {}
+        for old, grp, rel in conn.execute(
+                "SELECT f.supersedes, m.grp, m.rel FROM files f JOIN members m ON m.file_id = f.id "
+                "WHERE f.supersedes IS NOT NULL"):
+            superseded.setdefault(old, []).append("%s:%s" % (grp, rel))
+    finally:
+        idx.close()
+    notes = []
+    for grp, rel, title, date, date_src, status, stale, ents, size, pieces, sup, stem in rows:
+        ref = "%s:%s" % (grp, rel)
+        notes.append({"ref": ref, "group": grp, "path": rel, "title": title, "date": date, "date_source": date_src,
+                      "status": status or None, "stale": bool(stale), "entities": json.loads(ents or "[]"),
+                      "bytes": size, "sections": pieces, "stem": stem, "supersedes": sup,
+                      "superseded_by": superseded.get(ref, [])})
+    return dict(_groups_info(cfg), notes=notes, warnings=list(report.warnings) if report else [])
+
+
+def _split_frontmatter(text):
+    """(body, number of lines before it): the text after a --- or +++ header."""
+    lines = text.split("\n")
+    if lines and lines[0].strip() in ("---", "+++"):
+        fence = lines[0].strip()
+        for i in range(1, min(len(lines), 400)):
+            if lines[i].strip() == fence or (fence == "---" and lines[i].strip() == "..."):
+                return "\n".join(lines[i + 1:]), i + 1
+    return text, 0
+
+
+def c_note(cfg, args):
+    from notesearch import refs
+    from notesearch.search import Searcher
+    ref = refs.parse(str(args.get("ref") or ""))
+    idx, conn, _ = _index(cfg)
+    try:
+        row = conn.execute(
+            "SELECT f.id, f.real, f.title, f.fm, f.fm_error, f.date, f.date_src, f.status, f.stale, f.entities, "
+            "f.supersedes FROM members m JOIN files f ON f.id = m.file_id WHERE m.grp=? AND m.rel=?",
+            (ref.grp, ref.rel)).fetchone()
+        if not row:
+            return {"ok": False, "error": "no note %s:%s in the index" % (ref.grp, ref.rel)}
+        fid, real, title, fm, fm_error, date, date_src, status, stale, ents, sup = row
+        related = Searcher(conn, cfg).related(fid, list(cfg.groups), 30)
+        by = ["%s:%s" % r for r in conn.execute(
+            "SELECT m.grp, m.rel FROM files f JOIN members m ON m.file_id = f.id WHERE f.supersedes = ?",
+            ("%s:%s" % (ref.grp, ref.rel),))]
+    finally:
+        idx.close()
+    try:
+        with open(real, "rb") as fh:
+            raw = fh.read(MAX_NOTE_BYTES + 1)
+    except OSError as exc:
+        return {"ok": False, "error": "cannot read %s: %s" % (real, exc.strerror)}
+    cut = len(raw) > MAX_NOTE_BYTES
+    text = raw[:MAX_NOTE_BYTES].decode("utf-8", errors="replace").replace("\r\n", "\n")
+    if text.startswith("\ufeff"):
+        text = text[1:]
+    body, offset = _split_frontmatter(text)
+    return {"ok": True, "ref": "%s:%s" % (ref.grp, ref.rel), "heading": ref.heading, "title": title,
+            "frontmatter": json.loads(fm or "{}"), "frontmatter_error": fm_error or None, "body": body,
+            "body_line": offset + 1, "path": real, "date": date, "date_source": date_src, "status": status or None,
+            "stale": bool(stale), "entities": json.loads(ents or "[]"), "supersedes": sup, "superseded_by": by,
+            "related": related, "cut": cut}
+
+
+def c_measures(cfg, args):
+    return {"ok": True, "widgets": [dict(id=w, **WIDGETS[w](cfg)) for w in WIDGETS]}
+
+
+CALLS = {"search": c_search, "notes": c_notes, "note": c_note, "measures": c_measures}
+
+
 def main(argv):
     if not argv:
         sys.stderr.write("usage: run detect | fetch <widget> [--query text] | show session <id>\n")
@@ -291,6 +423,19 @@ def main(argv):
             return 0
         sys.stderr.write("unknown widget %s\n" % argv[1])
         return 2
+    if argv[0] == "call" and len(argv) >= 2 and argv[1] in CALLS:
+        try:
+            args = json.loads(argv[2]) if len(argv) > 2 else {}
+        except ValueError:
+            sys.stderr.write("call %s: the arguments are not JSON\n" % argv[1])
+            return 2
+        if not isinstance(args, dict):
+            args = {}
+        try:
+            out(CALLS[argv[1]](cfg, args))
+        except Exception as exc:  # the view shows the reason; the hub would only say "broken"
+            out({"ok": False, "error": "%s: %s" % (type(exc).__name__, exc)})
+        return 0
     if argv[0] == "show" and len(argv) == 3 and argv[1] == "session":
         out(show_session(cfg, argv[2].lower()))
         return 0

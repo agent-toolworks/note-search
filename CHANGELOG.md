@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 0.4.0 - 2026-11-03
+
+- toolworks-hub: note-search's tab is now its own page (`hub-source/page/`),
+  in three tabs. **Search** searches the groups you tick, several wordings at
+  once with `|`, unlogged. **Measures** shows what the widgets showed. **Notes**
+  lists every indexed note in a table you can filter and sort.
+- A note clicked in the results or the table opens on the right, rendered from
+  its Markdown by `page/md.js`: frontmatter as properties, headings listed, the
+  hit's section scrolled into view and the searched words marked; nested and
+  task lists, tables, code, quotes and Obsidian callouts, `==highlights==`,
+  `#tags`. Wiki links and relative links to other notes open in the same pane.
+  The renderer builds every element itself: HTML in a note is shown as text,
+  and a `javascript:` link is not a link.
+- `run call <op> <json>` answers the page: `search`, `notes`, `note` (only a
+  note the index holds) and `measures`. The widgets stay for `hub
+  check-source`, and the session section is unchanged.
+
 ## 0.3.0 - 2026-11-03
 
 - `ns add` (phase 3): creates a note in the one folder a group names as

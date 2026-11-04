@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>note-search</title>
+<!-- note-search's view in toolworks-hub: Search, Measures and Notes, with a
+     reader that opens a note beside the list. It asks note-search's
+     hub-source through the hub (/api/sources/<source>/call/<op>). -->
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="stylesheet" href="view.css">
+<script src="md.js" defer></script>
+<script src="view.js" defer></script>
+</head>
+<body>
+<header>
+  <h1>note-search</h1><span class="version" id="version"></span>
+  <div class="tabs" role="tablist">
+    <button role="tab" data-tab="search" aria-selected="true">Search</button>
+    <button role="tab" data-tab="measures" aria-selected="false">Measures</button>
+    <button role="tab" data-tab="notes" aria-selected="false">Notes</button>
+  </div>
+  <span class="spacer"></span>
+</header>
+
+<div class="layout" id="layout">
+  <main id="main">
+    <section id="tab-search" class="page" role="tabpanel">
+      <form id="sform" class="searchbar" autocomplete="off">
+        <input type="search" id="q" placeholder="Search the notes: a name, a table, a symptom…  (several wordings: a | b)" aria-label="Search">
+        <button class="primary" type="submit">Search</button>
+      </form>
+      <div class="groups" id="sgroups" aria-label="Groups to search"></div>
+      <div class="status" id="sstatus" role="status"></div>
+      <div id="sout"></div>
+    </section>
+
+    <section id="tab-measures" class="page" role="tabpanel" hidden>
+      <div class="bar">
+        <span class="muted">How agents' searches went, from the search log. Searches made on this page are not logged.</span>
+        <span class="spacer"></span>
+        <button type="button" id="mrefresh">Refresh</button>
+      </div>
+      <div class="status" id="mstatus" role="status"></div>
+      <div id="mout"></div>
+    </section>
+
+    <section id="tab-notes" class="page" role="tabpanel" hidden>
+      <div class="bar">
+        <input type="search" id="nfilter" placeholder="Filter by title, path, entity…" aria-label="Filter notes">
+        <select id="ngroup" aria-label="Group"><option value="">All groups</option></select>
+        <span class="muted" id="ncount"></span>
+        <span class="spacer"></span>
+        <button type="button" id="nrefresh">Refresh</button>
+      </div>
+      <div class="status" id="nstatus" role="status"></div>
+      <div class="tablewrap"><table id="ntable"></table></div>
+    </section>
+  </main>
+
+  <aside id="reader" class="reader" hidden aria-label="Note">
+    <div class="reader-head">
+      <div class="reader-title">
+        <h2 id="rtitle"></h2>
+        <div class="reader-ref"><code id="rref"></code>
+          <button type="button" class="small" id="rcopy" title="Copy the reference">copy</button>
+          <a id="ropen" class="small-link" title="Open the file in VS Code">open in VS Code</a>
+        </div>
+      </div>
+      <button type="button" class="close" id="rclose" title="Close" aria-label="Close the note">×</button>
+    </div>
+    <div class="reader-meta" id="rmeta"></div>
+    <div class="reader-toc" id="rtoc"></div>
+    <article id="rbody" class="md"></article>
+  </aside>
+</div>
+</body>
+</html>
