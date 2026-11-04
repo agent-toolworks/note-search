@@ -1,7 +1,7 @@
 {
   "budget": 600,
   "index": {
-    "ms": 1396,
+    "ms": 1398,
     "notes": 37,
     "skipped": 0
   },
@@ -10,82 +10,82 @@
       "ask_top5": 1.0,
       "first": 1.0,
       "n": 9,
-      "tokens_avg": 348,
-      "tokens_max": 583,
+      "tokens_avg": 343,
+      "tokens_max": 555,
       "top5": 1.0
     },
     "current": {
       "ask_top5": 1.0,
       "first": 1.0,
       "n": 6,
-      "tokens_avg": 300,
-      "tokens_max": 570,
+      "tokens_avg": 297,
+      "tokens_max": 556,
       "top5": 1.0
     },
     "exact": {
       "ask_top5": 1.0,
-      "first": 0.8888888888888888,
+      "first": 1.0,
       "n": 9,
-      "tokens_avg": 160,
-      "tokens_max": 267,
+      "tokens_avg": 150,
+      "tokens_max": 280,
       "top5": 1.0
     },
     "frontmatter": {
       "ask_top5": 1.0,
       "first": 1.0,
       "n": 3,
-      "tokens_avg": 493,
-      "tokens_max": 572,
+      "tokens_avg": 234,
+      "tokens_max": 355,
       "top5": 1.0
     },
     "large-file": {
       "ask_top5": 1.0,
       "first": 1.0,
       "n": 3,
-      "tokens_avg": 142,
-      "tokens_max": 209,
+      "tokens_avg": 169,
+      "tokens_max": 215,
       "top5": 1.0
     },
     "none": {
       "ask_top5": 1.0,
       "first": 1.0,
       "n": 6,
-      "tokens_avg": 158,
-      "tokens_max": 425,
+      "tokens_avg": 176,
+      "tokens_max": 404,
       "top5": 1.0
     },
     "other-group": {
       "ask_top5": 1.0,
       "first": 1.0,
       "n": 7,
-      "tokens_avg": 81,
-      "tokens_max": 137,
+      "tokens_avg": 80,
+      "tokens_max": 213,
       "top5": 1.0
     },
     "partial": {
       "ask_top5": 1.0,
       "first": 1.0,
       "n": 6,
-      "tokens_avg": 356,
-      "tokens_max": 592,
+      "tokens_avg": 258,
+      "tokens_max": 428,
       "top5": 1.0
     },
     "symptom": {
-      "ask_top5": 0.8333333333333334,
+      "ask_top5": 0.9166666666666666,
       "first": 1.0,
       "n": 12,
-      "tokens_avg": 310,
-      "tokens_max": 581,
+      "tokens_avg": 350,
+      "tokens_max": 572,
       "top5": 1.0
     }
   },
   "over_budget": [],
   "overall": {
-    "ask_top5": 0.9672131147540983,
-    "first": 0.9836065573770492,
+    "ask_top5": 0.9836065573770492,
+    "first": 1.0,
     "n": 61,
-    "tokens_avg": 257,
-    "tokens_max": 592,
+    "tokens_avg": 242,
+    "tokens_max": 572,
     "top5": 1.0
   }
 }
