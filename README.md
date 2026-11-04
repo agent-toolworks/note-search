@@ -19,9 +19,9 @@ hundred tokens.
 Built the way [code-search](https://github.com/agent-toolworks/code-search-fleet)
 is. [Design doc](https://claude.ai/artifact/G796JzMBsbj8Qc57Lhpf8y).
 
-**Status:** phases 1 and 2 are built: the `ns` command and its index, the
-question set, the Claude Code plugin and skill, the search log and the hub
-source. Adding notes (`ns add`) is phase 3.
+**Status:** phases 1 to 3 are built: the `ns` command and its index, the
+question set, the Claude Code plugin and skill, the search log, the hub
+source, and adding notes (`ns add`) to a group that allows it.
 
 ## Install
 
@@ -112,9 +112,54 @@ than one `~/.claude*` folder).
 | `ns index [--rebuild]` | Updates now; normally not needed |
 | `ns config check` | Validates the config and shows each group's folders and field roles |
 | `ns eval <questions.json>` | Scores search quality; `--gate` exits 1 below the release gates |
+| `ns add --group g --title T [--entities a,b] [--tags t] [--source S] [--new \| --supersedes ref] < text.md` | Creates a note in the group's write folder (below) |
+| `ns add --append <ref> < text.md` | Adds text to a note `ns add` created, under a dated heading |
 
 Every command takes `--json` for programs and `--config` for another config file
 (or `$NS_CONFIG`). `$NS_CACHE` moves the index.
+
+## Adding notes
+
+Writing is off unless a group names the one folder ns may create notes in:
+
+```json
+{"groups": {"kb": {"dirs": ["~/kb"], "write": "~/kb/inbox",
+                   "fields": {"title": "name", "entities": "service"}}}}
+```
+
+The folder must be inside one of the group's `dirs`, visible (not a dot
+folder) and not excluded, so a new note is found at once; `ns doctor` checks
+it. Then
+
+```sh
+ns add --group kb --title "Payment retry cap" --entities payments-api,retry_queue \
+  --source INC-2026-002 < text.md
+```
+
+creates `kb:inbox/2026-11-04-payment-retry-cap.md`. The rules:
+
+- **New files only.** ns never edits or deletes a note it did not create, and
+  never commits. Committing the file is your choice.
+- **The group's own field names.** The frontmatter uses the group's role
+  mapping (`name:`, `service:`, `updated:` above), plus `source:` and
+  `ns_created:` with the date, so the note looks like the rest of the group.
+- **Observed apart from concluded.** The text needs an `Observed` or a
+  `Concluded` heading (or both): what was seen, and what was worked out from
+  it, never blended in one paragraph.
+- **No credentials.** Text that looks like a key, a token or a password
+  (`ns doctor --secrets`' patterns) is refused; say where the secret is kept
+  instead.
+- **Duplicates.** The group is searched first. A note with the same title, or
+  one sharing an entity and at least half of the title's words, stops the
+  write: ns lists it and exits 3. Pass `--new` if yours is a different note,
+  or `--supersedes <ref>` if it replaces that one. The old note is left as it
+  is; its hits then say `superseded by <new ref>`, and `ns related` links the
+  two.
+- **Appending.** `ns add --append <ref>` adds text under `## Added <date>`, but
+  only to a note in the write folder that carries `ns_created:`.
+
+Exit status: 0 written, 2 refused (the reason on stderr), 3 close matches and
+nothing written.
 
 ## How a search works
 

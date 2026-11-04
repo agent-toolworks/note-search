@@ -67,7 +67,26 @@ class Group:
     roles: Roles
     engine: str = "fts5"
     description: str = ""
+    write: str = ""  # the one folder `ns add` may create notes in; "" = read-only
     _matchers: list = field(default_factory=list, repr=False)
+
+    def write_dir(self) -> tuple:
+        """(Dir it falls in, its path inside that Dir) for the write folder, or (None, why not)."""
+        if not self.write:
+            return None, "group %s does not allow adding notes; give it \"write\": \"<folder>\" in ns.json" % self.id
+        dirs, _ = self.resolve()
+        real = os.path.realpath(self.write)
+        for d in dirs:
+            root = os.path.realpath(d.path)
+            if real == root or real.startswith(root.rstrip(os.sep) + os.sep):
+                inside = "" if real == root else os.path.relpath(real, root).replace(os.sep, "/")
+                if any(part.startswith(".") for part in inside.split("/") if part):
+                    return None, "group %s: write folder %s is hidden, and hidden folders are not indexed" % (self.id, self.write)
+                if inside and self.excluded(inside, is_dir=True):
+                    return None, "group %s: write folder %s is excluded from the group" % (self.id, self.write)
+                return d, inside
+        return None, ("group %s: write folder %s is not inside any of its folders, so notes added there "
+                      "would not be found" % (self.id, self.write))
 
     def resolve(self) -> tuple:
         """([Dir], [warning]) for the folders this group covers now."""
@@ -303,6 +322,17 @@ def _groups_from(raw: dict, base: str, problems: list, groups: dict, source: str
             engine=g.get("engine", "fts5"),
             description=str(g.get("description", "")),
         )
+        write = g.get("write")
+        if write is not None:
+            if not isinstance(write, str) or not write.strip():
+                problems.append("group %s: write must be a folder path" % gid)
+            else:
+                groups[gid].write = _abs(write, base)
+                plain = [d for d in groups[gid].dirs if not glob.has_magic(d)]
+                if plain and len(plain) == len(groups[gid].dirs) and not any(
+                        os.path.commonpath([groups[gid].write, d]) == d for d in plain):
+                    problems.append("group %s: write folder %s is not inside any of its dirs, so notes added "
+                                    "there would not be found" % (gid, groups[gid].write))
         if groups[gid].engine != "fts5":
             problems.append("group %s: engine %r is not available; only fts5 is built in" % (gid, groups[gid].engine))
 

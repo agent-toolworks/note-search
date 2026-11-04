@@ -94,6 +94,7 @@ class Note:
     sections: int
     score: float
     related: list = field(default_factory=list)
+    superseded_by: list = field(default_factory=list)
 
     @property
     def ref(self) -> str:
@@ -109,7 +110,7 @@ class Note:
             "title": self.title, "heading_path": self.hpath, "date": self.date, "date_source": self.date_src,
             "status": self.status, "stale": self.stale, "partial": self.partial, "snippet": self.snippet,
             "stage": self.stage, "coverage": list(self.coverage), "sections_matched": self.sections,
-            "score": round(self.score, 5), "related": self.related,
+            "score": round(self.score, 5), "related": self.related, "superseded_by": self.superseded_by,
         }
 
 
@@ -452,7 +453,26 @@ class Searcher:
                 stale=bool(stale), partial=bool(partial),
                 snippet=self.snippet(sec[5], sec[4], sec[2], sec[3], hit.terms),
                 stage=hit.stage, coverage=hit.coverage, sections=len(entry["sections"]), score=score))
+        self._replacements(out, groups)
         return out
+
+    def _replacements(self, notes: list, groups: list):
+        """Mark each note that a newer note supersedes (`supersedes: group:path`)."""
+        if not notes:
+            return
+        by_ref = {}
+        for n in notes:
+            for grp, rel in self.conn.execute("SELECT grp, rel FROM members WHERE file_id=?", (n.file_id,)):
+                by_ref["%s:%s" % (grp, rel)] = n
+        rows = self.conn.execute(
+            "SELECT f.supersedes, m.grp, m.rel FROM files f JOIN members m ON m.file_id = f.id "
+            "WHERE f.supersedes IN (SELECT value FROM json_each(?))", (json.dumps(list(by_ref)),)).fetchall()
+        order = {g: i for i, g in enumerate(groups)}
+        for old, grp, rel in sorted(rows, key=lambda r: order.get(r[1], len(order))):
+            n = by_ref.get(old)
+            new = "%s:%s" % (grp, rel)
+            if n is not None and new not in n.superseded_by and new != n.ref:
+                n.superseded_by.append(new)
 
     def related(self, file_id: int, groups: list, limit: int = 3) -> list:
         """References of notes linked from or to this one, in the given groups."""

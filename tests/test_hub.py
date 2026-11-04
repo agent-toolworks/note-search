@@ -181,7 +181,7 @@ class Plugin(unittest.TestCase):
         self.assertIsNotNone(m)
         self.assertLessEqual(len(m.group(1)) / 4, 120, "the description is loaded in every session; keep it short")
         for cmd in re.findall(r'"\$NS" (\w+)', text):
-            self.assertIn(cmd, ("search", "get", "doctor", "config", "fields"))
+            self.assertIn(cmd, ("search", "get", "add", "doctor", "config", "fields"))
         self.assertIn('${CLAUDE_PLUGIN_ROOT:-$PWD}/bin/ns', text)
         self.assertTrue(os.access(os.path.join(ROOT, "bin", "ns"), os.X_OK))
 

@@ -2,7 +2,7 @@
   "contract": 4,
   "name": "note-search",
   "title": "note-search",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "network": false,
   "refresh_seconds": 300,
   "timeout_seconds": 20,

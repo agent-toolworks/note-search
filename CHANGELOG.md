@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## 0.3.0 - 2026-11-03
+
+- `ns add` (phase 3): creates a note in the one folder a group names as
+  `"write"`, using the group's own frontmatter field names plus `source:` and
+  `ns_created:`. New files only: no edits to notes ns did not create, no
+  deletes, no commits; the note is indexed at once. The text needs an
+  Observed or a Concluded heading, and text that looks like a credential is
+  refused. The group is searched first; a note with the same title, or
+  sharing an entity and half the title's words, stops the write (exit 3)
+  unless `--new` or `--supersedes <ref>` is given. `--append <ref>` extends a
+  note ns created, under a dated heading.
+- A note superseded by an added one says `superseded by <ref>` on its hits
+  (`superseded_by` in `--json`). The index schema is now 3; the first command
+  after the update rebuilds the index.
+- `ns groups`, `ns config check` and `ns doctor` show each group's write
+  folder; doctor fails one that is hidden, excluded or outside the group.
+- Fixed: a search answer could run a few tokens over its budget, because the
+  "N more" line and the warnings after the notes were not counted. The test
+  of 1,000 generated notes failed about one run in three for this reason.
+
 - Ranking: a note named after what was asked for (its title, an alias or its
   file name) now gets 1.6x, up from 1.3x, so it outranks a note that only lists
   the thing as an entity (1.5x). A superseded decision record ranked above the

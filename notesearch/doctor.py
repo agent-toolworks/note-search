@@ -81,6 +81,12 @@ def run(args) -> tuple:
                   "fix or remove the missing folders in %s" % cfg.path, warns)
         else:
             c.add("OK", "group %s: %d folder%s" % (gid, len(dirs), "" if len(dirs) == 1 else "s"))
+        if g.write:
+            d, why = g.write_dir()
+            if d is None:
+                c.add("FAIL", why, "point write at a visible folder inside the group's dirs in %s" % cfg.path)
+            else:
+                c.add("OK", "group %s: ns add writes to %s" % (gid, g.write))
 
     idx = Index(cfg)
     try:

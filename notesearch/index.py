@@ -27,7 +27,7 @@ from . import frontmatter as fmlib
 from . import names
 from .split import read_note
 
-SCHEMA = "2"
+SCHEMA = "3"
 FTS_COLUMNS = ("title", "aliases", "entities", "headings", "path", "meta", "tags", "idents", "body")
 BODY_COL = FTS_COLUMNS.index("body")
 
@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS files(
   id INTEGER PRIMARY KEY, real TEXT UNIQUE NOT NULL, size INT, mtime_ns INT,
   grp TEXT, rel TEXT, stem TEXT, title TEXT, fm TEXT, fm_error TEXT, fm_warnings TEXT,
   date TEXT, date_src TEXT, status TEXT, stale INT, partial INT,
-  entities TEXT, aliases TEXT, pieces INT, indexed_at REAL);
+  entities TEXT, aliases TEXT, pieces INT, indexed_at REAL, supersedes TEXT);
+CREATE INDEX IF NOT EXISTS files_supersedes ON files(supersedes);
 CREATE INDEX IF NOT EXISTS files_stem ON files(stem);
 CREATE TABLE IF NOT EXISTS members(grp TEXT, rel TEXT, file_id INT, PRIMARY KEY(grp, rel));
 CREATE INDEX IF NOT EXISTS members_file ON members(file_id);
@@ -66,6 +67,8 @@ _FTS = ("CREATE VIRTUAL TABLE IF NOT EXISTS sec_fts USING fts5("
 _WIKI = re.compile(r"\[\[([^\]|#\n]+)(?:#[^\]|\n]*)?(?:\|[^\]\n]*)?\]\]")
 _MDLINK = re.compile(r"\]\(([^)\s]+?\.(?:md|markdown))(?:#[^)\s]*)?\)", re.I)
 _DATE = re.compile(r"(\d{4}-\d{2}-\d{2})")
+# The field `ns add --supersedes` writes: the reference of the note this one replaces.
+SUPERSEDES = "supersedes"
 
 
 class NotReady(Exception):
@@ -499,11 +502,12 @@ class Index:
                 pieces = conn.execute("SELECT count(*) FROM sections WHERE file_id=?", (file_id,)).fetchone()[0]
                 conn.execute(
                     "UPDATE files SET grp=?, rel=?, stem=?, title=?, fm=?, fm_error=?, fm_warnings=?, date=?, date_src=?, "
-                    "status=?, stale=?, partial=?, entities=?, aliases=?, pieces=?, indexed_at=? WHERE id=?",
+                    "status=?, stale=?, partial=?, entities=?, aliases=?, pieces=?, indexed_at=?, supersedes=? WHERE id=?",
                     (gid, rel, stem, title, json.dumps(fm, ensure_ascii=False), note.fm_error,
                      json.dumps(note.fm_warnings), date, date_src, status, stale, 1 if note.partial else 0,
                      json.dumps([e.lower() for e in state.get("entities", [])]),
-                     json.dumps(state.get("aliases", [])), pieces, time.time(), file_id))
+                     json.dumps(state.get("aliases", [])), pieces, time.time(),
+                     (fmlib.values(fm, [SUPERSEDES]) or [None])[0], file_id))
                 targets.discard(stem)
                 conn.executemany("INSERT INTO links VALUES(?,?)", [(file_id, t) for t in targets if t])
                 fresh = vocab_new - known

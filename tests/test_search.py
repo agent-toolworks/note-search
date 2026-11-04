@@ -100,6 +100,21 @@ class Budget(Tree):
         self.assertTrue(any(line.startswith("%d notes:" % (offset + 1)) for line in out2.split("\n")), out2)
         self.assertLessEqual(tokens(out2), 300)
 
+    def test_the_more_line_and_warnings_fit_in_the_budget(self):
+        # The "N more" line and the warnings come after the notes; an answer
+        # that fills the budget with notes must still leave room for them.
+        # Every budget from 120 to 600 tokens, so no length can slip through.
+        from notesearch import render
+        self.config()
+        for i in range(40):
+            self.write("notes/n%02d.md" % i, "# Heron note %d\nheron %s\n" % (i, "z" * (37 * i % 200)))
+        res = self.search("heron")
+        res.warnings = ["folder /somewhere/that/is/missing does not exist", "3 files skipped; see ns doctor"]
+        for budget in range(120, 601):
+            text, shown = render.search_text(res, budget, 0, lambda n: [], q="3f9a1c2e")
+            self.assertLessEqual(tokens(text), budget, "budget %d" % budget)
+            self.assertGreaterEqual(shown, 1)
+
     def test_one_note_always_shows(self):
         self.config(limits={"answer_tokens": 10})
         self.write("notes/a.md", "# A\nquetzal " + "y" * 2000)

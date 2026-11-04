@@ -21,6 +21,8 @@ def note_lines(i: int, note) -> list:
     flags = []
     if note.stale:
         flags.append("STALE" + (" (%s)" % note.status if note.status else ""))
+    if note.superseded_by:
+        flags.append("superseded by " + ", ".join(note.superseded_by))
     if note.partial:
         flags.append("partly indexed")
     if note.stage == "relaxed":
@@ -62,13 +64,18 @@ def search_text(res, budget: int, offset: int, related, q: str = "") -> tuple:
         if not res.strict_found:
             out.append("no strict match; partial matches only" +
                        ("; nearest names: " + ", ".join(res.nearest) if res.nearest else ""))
-    used = tokens("\n".join(out))
+    # The lines that come after the notes count too: the warnings always, and
+    # the "N more" line whenever a note is left out.
+    tail = ["warning: " + w for w in res.warnings]
+    used = tokens("\n".join(out + tail))
+    more_cost = tokens("%d more: repeat with --offset %d" % (len(notes), offset + len(notes))) + 1
     shown = 0
     for i, note in enumerate(notes, offset + 1):
         note.related = related(note)
         lines = note_lines(i, note)
         cost = tokens("\n".join(lines)) + 1
-        if shown and used + cost > budget:
+        left_out = i - offset < len(notes)
+        if shown and used + cost + (more_cost if left_out else 0) > budget:
             break
         out.extend(lines)
         used += cost
