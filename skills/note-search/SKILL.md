@@ -30,6 +30,9 @@ NS="${CLAUDE_PLUGIN_ROOT:-$PWD}/bin/ns"    # installed as a plugin, or a clone
   see which searches led somewhere.
 - **"no strict match; partial matches only"** means no note holds every word.
   Rephrase once with other names, or treat it as not known.
+- **"close in meaning, not in words"** marks a hit from a group searched by
+  meaning (embeddings): it may be about your question in other words, or only
+  near it. Read its snippet before relying on it.
 - **Prefer the newer note** when two disagree; dates are on every hit, and a
   note marked STALE has been superseded.
 - `--group kb,memory` limits the groups; `field=value` filters on frontmatter
@@ -80,6 +83,10 @@ them on your own. `"$NS" config check` shows what each group covers, and
 `"$NS" fields <group>` lists the frontmatter fields found, to map roles
 (title, aliases, entities, date, status) as the README explains. Needs only
 `python3` with SQLite 3.34 or newer, which macOS has.
+Search by meaning is optional and off by default: a group with
+`"engine": "embeddings"` also needs a local model or an embeddings server
+(README, "Search by meaning"); suggest it only when the person asks, since it
+installs a package and downloads a model.
 
 Other commands: `ns related <ref>` (linked notes), `ns groups`,
 `ns doctor --secrets` (flags text that looks like credentials, without

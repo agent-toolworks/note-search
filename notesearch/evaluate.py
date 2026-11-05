@@ -17,7 +17,8 @@ Scores, per kind and overall: the right note first; in the top 5; asked as
 written only (`ask` alone, no other wordings); tokens per answer. For kind
 "none", the right answer is no strict hit. Release gates: top 5 at least
 90%, first at least 70%, no kind down more than 5 points from the baseline,
-no answer over its token budget.
+no answer over its token budget. A set that says `"floors": false` (one made
+to measure what search misses) is held only to the last two.
 """
 from __future__ import annotations
 
@@ -69,7 +70,7 @@ def generate(path: str, mb: float, seed: int, inject: list):
             fh.write("\n" + text.strip() + "\n")
 
 
-def _prepare(qpath: str, work: str) -> tuple:
+def _prepare(qpath: str, work: str, engine: str = None) -> tuple:
     with open(qpath, encoding="utf-8") as fh:
         spec = json.load(fh)
     src = os.path.dirname(os.path.abspath(qpath))
@@ -86,6 +87,9 @@ def _prepare(qpath: str, work: str) -> tuple:
         os.makedirs(os.path.dirname(out), exist_ok=True)
         generate(out, gen["mb"], gen.get("seed", 1), gen.get("inject", []))
     raw["cache_dir"] = os.path.join(work, "cache")
+    if engine:
+        for g in raw["groups"].values():
+            g["engine"] = engine
     with open(cfg_path, "w", encoding="utf-8") as fh:
         json.dump(raw, fh)
     return spec, cfg_path
@@ -98,14 +102,20 @@ def _rank(notes: list, expect: list) -> int:
     return 0
 
 
-def score(qpath: str, verbose: bool = False) -> dict:
+def score(qpath: str, verbose: bool = False, engine: str = None) -> dict:
     work = tempfile.mkdtemp(prefix="ns-eval-")
     saved_cache = os.environ.pop("NS_CACHE", None)
     try:
-        spec, cfg_path = _prepare(qpath, work)
+        spec, cfg_path = _prepare(qpath, work, engine)
         cfg = cfglib.load(cfg_path)
+        if cfg.embedded():
+            # Vectors depend only on the model and the text: keep them across runs.
+            os.makedirs(os.path.expanduser(cfglib.DEFAULT_CACHE), mode=0o700, exist_ok=True)
+            cfg.vectors = os.path.join(os.path.expanduser(cfglib.DEFAULT_CACHE), "eval-vectors.db")
         idx = Index(cfg)
-        report = idx.update()
+        report = idx.update(embed_seconds=None)
+        if cfg.embedded() and report.embed_waiting:
+            raise RuntimeError("; ".join(report.warnings))
         conn = idx.open()
         s = Searcher(conn, cfg)
         results = []
@@ -144,6 +154,7 @@ def score(qpath: str, verbose: bool = False) -> dict:
                     "tokens_avg": round(sum(r["tokens"] for r in rs) / n), "tokens_max": max(r["tokens"] for r in rs)}
 
         return {
+            "floors": spec.get("floors", True),
             "overall": agg(results), "kinds": {k: agg(v) for k, v in sorted(kinds.items())},
             "over_budget": [r["id"] for r in results if r["tokens"] > budget], "budget": budget,
             "index": {"notes": report.added, "ms": report.ms, "skipped": len(report.skipped)},
@@ -158,9 +169,10 @@ def score(qpath: str, verbose: bool = False) -> dict:
 def gates(scores: dict, baseline: dict = None) -> list:
     failures = []
     o = scores["overall"]
-    if o["top5"] < GATE_TOP5:
+    floors = scores.get("floors", True)
+    if floors and o["top5"] < GATE_TOP5:
         failures.append("top 5 is %.0f%%, under %.0f%%" % (o["top5"] * 100, GATE_TOP5 * 100))
-    if o["first"] < GATE_FIRST:
+    if floors and o["first"] < GATE_FIRST:
         failures.append("first is %.0f%%, under %.0f%%" % (o["first"] * 100, GATE_FIRST * 100))
     if scores["over_budget"]:
         failures.append("answers over the token budget: " + ", ".join(scores["over_budget"]))
@@ -173,7 +185,7 @@ def gates(scores: dict, baseline: dict = None) -> list:
 
 
 def run(args) -> tuple:
-    scores = score(args.questions, args.verbose)
+    scores = score(args.questions, args.verbose, getattr(args, "engine", None))
     baseline = None
     if args.baseline and os.path.exists(args.baseline):
         with open(args.baseline) as fh:

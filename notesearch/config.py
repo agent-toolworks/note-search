@@ -13,6 +13,8 @@ import os
 import re
 from dataclasses import dataclass, field
 
+from . import embed
+
 DEFAULT_PATH = "~/.config/agent-toolworks/ns.json"
 DEFAULT_CACHE = "~/.cache/agent-toolworks/ns"
 EXTENSIONS = (".md", ".markdown", ".txt")
@@ -30,7 +32,8 @@ DEFAULT_ROLES = {
 }
 
 _GROUP_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,31}$")
-_TOP_KEYS = {"include", "default_groups", "groups", "limits", "log", "cache_dir"}
+_TOP_KEYS = {"include", "default_groups", "groups", "limits", "log", "cache_dir", "embeddings"}
+ENGINES = ("fts5", "embeddings")
 _GROUP_KEYS = {"dirs", "exclude", "fields", "engine", "write", "description"}
 _LIMIT_KEYS = {"max_file_mb", "answer_tokens", "get_tokens"}
 
@@ -68,6 +71,7 @@ class Group:
     engine: str = "fts5"
     description: str = ""
     write: str = ""  # the one folder `ns add` may create notes in; "" = read-only
+    embed_fp: str = ""  # with engine "embeddings": what its vectors depend on
     _matchers: list = field(default_factory=list, repr=False)
 
     def write_dir(self) -> tuple:
@@ -117,7 +121,10 @@ class Group:
         return False
 
     def fingerprint(self) -> str:
-        blob = json.dumps([self.dirs, self.exclude, self.roles.__dict__], sort_keys=True)
+        parts = [self.dirs, self.exclude, self.roles.__dict__]
+        if self.engine != "fts5":  # a group that turns embeddings on or off is read again
+            parts += [self.engine, self.embed_fp]
+        blob = json.dumps(parts, sort_keys=True)
         return hashlib.sha1(blob.encode()).hexdigest()[:12]
 
 
@@ -136,7 +143,13 @@ class Config:
     limits: Limits
     log: str
     cache_dir: str
+    embeddings: embed.Settings = None
+    vectors: str = ""  # vectors.db, if not in cache_dir (ns eval keeps one across runs)
     warnings: list = field(default_factory=list)
+
+    def embedded(self, groups=None) -> list:
+        """The groups, of those given (default all), whose engine is embeddings."""
+        return [g for g in (groups if groups is not None else self.groups) if self.groups[g].engine == "embeddings"]
 
     def group_ids(self, wanted=None) -> list:
         if not wanted:
@@ -333,8 +346,9 @@ def _groups_from(raw: dict, base: str, problems: list, groups: dict, source: str
                         os.path.commonpath([groups[gid].write, d]) == d for d in plain):
                     problems.append("group %s: write folder %s is not inside any of its dirs, so notes added "
                                     "there would not be found" % (gid, groups[gid].write))
-        if groups[gid].engine != "fts5":
-            problems.append("group %s: engine %r is not available; only fts5 is built in" % (gid, groups[gid].engine))
+        if groups[gid].engine not in ENGINES:
+            problems.append("group %s: engine %r is not available; engines are %s" % (
+                gid, groups[gid].engine, ", ".join(ENGINES)))
 
 
 def load(path: str = None) -> Config:
@@ -384,6 +398,11 @@ def load(path: str = None) -> Config:
         problems.append("log must be \"full\", \"counts\" or \"off\"")
     cache = os.environ.get("NS_CACHE") or (
         _abs(raw["cache_dir"], base) if isinstance(raw.get("cache_dir"), str) else os.path.expanduser(DEFAULT_CACHE))
+    settings = embed.parse_settings(raw.get("embeddings"), base, problems)
+    for g in groups.values():
+        if g.engine == "embeddings":
+            g.embed_fp = settings.fingerprint()
     if problems:
         raise ConfigError(problems)
-    return Config(path=path, groups=groups, default_groups=default, limits=limits, log=log, cache_dir=cache)
+    return Config(path=path, groups=groups, default_groups=default, limits=limits, log=log, cache_dir=cache,
+                  embeddings=settings)

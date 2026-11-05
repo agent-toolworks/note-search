@@ -157,7 +157,9 @@ async function search() {
     head.push(el("div", { class: "box empty" }, "No note matches in " + d.searched.join(", ") +
       (d.nearest && d.nearest.length ? ". Nearest names: " + d.nearest.join(", ") : "")));
   } else if (!d.strict_found) {
-    head.push(el("div", { class: "box warn" }, "No note has every word; these match some of them" +
+    const meaning = d.notes.every((n) => n.stage === "semantic");
+    head.push(el("div", { class: "box warn" }, (meaning ? "No note has these words; these are close in meaning"
+      : "No note has every word; these match some of them") +
       (d.nearest && d.nearest.length ? ". Nearest names: " + d.nearest.join(", ") : "")));
   }
   for (const w of d.warnings || []) head.push(el("div", { class: "box warn" }, w));
@@ -170,7 +172,8 @@ async function search() {
     el("div", { class: "rt" }, n.title || n.ref, chip(n.ref.split(":")[0], "group"),
       n.stale ? chip("STALE" + (n.status ? " (" + n.status + ")" : ""), "stale") : null,
       (n.superseded_by || []).length ? chip("superseded by " + n.superseded_by.join(", "), "super") : null,
-      n.stage === "relaxed" ? chip("partial " + n.coverage.join("/")) : n.stage === "names" ? chip("name corrected") : null),
+      n.stage === "relaxed" ? chip("partial " + n.coverage.join("/")) : n.stage === "names" ? chip("name corrected")
+        : n.stage === "semantic" ? chip("close in meaning") : null),
     el("div", { class: "rs" }, n.section + "  ·  L" + n.lines[0] + "-" + n.lines[1]),
     n.snippet ? el("div", { class: "rx" }, highlightText(n.snippet, lastTerms)) : null,
     el("div", { class: "rf" }, dateText(n.date, n.date_source),

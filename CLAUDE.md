@@ -17,6 +17,7 @@ Non-negotiables:
 
 Layout: `bin/ns` runs `notesearch/cli.py`; `notesearch/` holds the config,
 frontmatter reader, splitter, index, search, `ns get`, rendering, doctor and eval,
+`embed.py` (the optional search by meaning, off unless a group asks for it),
 plus `searchlog.py` (the search log), `stats.py` (measures read from it) and
 `add.py` (`ns add`, the only code that writes into a group's folders).
 `hub-source/` is the toolworks-hub source (contract 4); `skills/note-search/` and
@@ -27,10 +28,17 @@ library only):
     python3 -m unittest discover -s tests -t .
     NS_BENCH=1 python3 -m unittest tests.test_scale   # 10,000 notes, design limits
     bin/ns eval fixtures/eval/questions.json --verbose --baseline fixtures/eval-baseline.json
+    bin/ns eval fixtures/eval/reworded.json --verbose --baseline fixtures/eval-reworded-baseline.json
 
 A change to ranking reruns the eval; refresh `fixtures/eval-baseline.json` with
 `--write-baseline` only when the change is meant to move the scores, and say so
-in the pull request.
+in the pull request. The reworded set (questions in other words than the notes)
+is held to its own baseline, not to the release floors. The optional
+embeddings engine (`embed.py`) needs fastembed or an embeddings server, so the
+tests use stand-ins; a change to it, or to how its hits are merged, reruns both
+sets with `--engine embeddings` in a Python that has fastembed, against
+`fixtures/eval-embeddings-baseline.json` and
+`fixtures/eval-reworded-embeddings-baseline.json`.
 
 `VERSION` and `CHANGELOG.md`: one version for the project; add a line under
 Unreleased with every change. A release sets the same version in `VERSION`,

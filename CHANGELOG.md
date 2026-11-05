@@ -1,6 +1,39 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 - 2026-11-05
+
+- Search by meaning, optional, per group: `"engine": "embeddings"`. Each
+  wording also finds the sections closest to it in meaning (stage
+  `semantic`), merged with the words' hits by rank fusion; such a hit is
+  never a strict match and is labelled "close in meaning, not in words".
+  Providers: `fastembed` (a local model, BAAI/bge-small-en-v1.5 by default,
+  run in a Python of its own so ns stays standard library) and `http` (any
+  OpenAI-style `/embeddings` server: Ollama, LM Studio, llama.cpp). Off by
+  default; the default install loads no model and no package.
+- Vectors are kept in `vectors.db` beside the index, keyed by model and
+  text, so a rebuild or a moved note is not embedded again. A command
+  spends at most 2 s embedding; `ns index` embeds the rest, and
+  `ns index --download` is the only thing that fetches a model.
+- `ns doctor` checks a configured engine and how much is embedded; an engine
+  that cannot run leaves searches on words with one warning naming the fix.
+- A second question set, `fixtures/eval/reworded.json`: 24 questions asked
+  in other words than the notes use. It is held to no drop from its own
+  baseline, not to the release floors (`"floors": false`). `ns eval
+  --engine embeddings` scores any set with the engine on.
+- Index schema 4 (rebuilt automatically). The search log's fields are
+  unchanged; `stages` may now hold `semantic`, and the hub's measures count
+  those searches and how often their hits were opened.
+- A note in two groups is read again when either group's settings change,
+  not only its first group's.
+- Measured with the default model (M2): on the reworded set, the right note
+  is in the top 5 for 24 of 24 questions (words only: 8) and first for 75%
+  (words only: 25%). On the main set, top 5 stays at 100% and first goes from
+  100% to 98%. Baselines with the engine on are in
+  `fixtures/eval-embeddings-baseline.json` and
+  `fixtures/eval-reworded-embeddings-baseline.json`; the words-only scores do
+  not change.
+- README: the main set's first-place score read 98%; it is 100% (98% is the
+  "asked as written only" column).
 
 ## 0.4.0 - 2026-11-03
 

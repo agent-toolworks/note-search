@@ -23,11 +23,12 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 
 from . import config as cfglib
+from . import embed
 from . import frontmatter as fmlib
 from . import names
 from .split import read_note
 
-SCHEMA = "3"
+SCHEMA = "4"
 FTS_COLUMNS = ("title", "aliases", "entities", "headings", "path", "meta", "tags", "idents", "body")
 BODY_COL = FTS_COLUMNS.index("body")
 
@@ -54,6 +55,10 @@ CREATE VIRTUAL TABLE IF NOT EXISTS vocab_tri USING fts5(term, tokenize='trigram'
 CREATE TABLE IF NOT EXISTS binaries(real TEXT PRIMARY KEY, size INT, mtime_ns INT);
 CREATE TABLE IF NOT EXISTS skips(grp TEXT, rel TEXT, reason TEXT);
 CREATE TABLE IF NOT EXISTS groups_state(grp TEXT PRIMARY KEY, fingerprint TEXT, files INT, updated REAL);
+CREATE TABLE IF NOT EXISTS sec_embed(section_id INTEGER PRIMARY KEY, file_id INT, key TEXT);
+CREATE INDEX IF NOT EXISTS sec_embed_file ON sec_embed(file_id);
+CREATE INDEX IF NOT EXISTS sec_embed_key ON sec_embed(key);
+CREATE TABLE IF NOT EXISTS embed_queue(key TEXT PRIMARY KEY, text TEXT);
 """
 
 # The full-text table keeps no copy of the text when SQLite allows deleting
@@ -85,6 +90,8 @@ class Report:
     warnings: list = field(default_factory=list)
     busy: bool = False
     ms: int = 0
+    embedded: int = 0  # sections given a vector by this update
+    embed_waiting: int = 0  # sections still waiting for one
 
 
 def stem_of(path: str) -> str:
@@ -303,7 +310,9 @@ class Index:
             os.close(fd)
 
     # -- updating --------------------------------------------------------
-    def update(self) -> Report:
+    def update(self, embed_seconds=embed.EMBED_SECONDS, download: bool = False) -> Report:
+        """Bring the index up to date. With embedded groups, then spend at most
+        `embed_seconds` (None: as long as it takes) giving sections their vectors."""
         start = time.time()
         report = Report()
         with self._writer() as got:
@@ -324,6 +333,8 @@ class Index:
                 self._set_aside("corrupt")
                 report = Report()
                 self._update(report)
+            if self.cfg.embedded():
+                self._embed(report, embed_seconds, download)
         report.warnings = self.notices + report.warnings
         self.notices = []
         report.ms = int((time.time() - start) * 1000)
@@ -350,7 +361,7 @@ class Index:
                     self._delete(conn, old[0])
                 continue
             if old and old[2] == info["size"] and old[3] == info["mtime_ns"] and old[4] == primary[0] \
-                    and old[5] == primary[1] and primary[0] not in redo:
+                    and old[5] == primary[1] and not any(m[0] in redo for m in info["members"]):
                 report.unchanged += 1
                 continue
             outcome = self._index_file(conn, real, info, old[0] if old else None)
@@ -400,8 +411,23 @@ class Index:
                     (gid, fp, counts.get(gid, 0), now) for gid, fp in fingerprints.items()])
                 conn.execute("INSERT OR REPLACE INTO meta VALUES('updated', ?)", (str(now),))
 
+    def _embed(self, report: Report, seconds, download: bool):
+        conn = self.conn
+        with conn:
+            conn.execute("DELETE FROM embed_queue WHERE key NOT IN (SELECT key FROM sec_embed)")
+        got = embed.fill(conn, self.cfg, seconds, download)
+        report.embedded, report.embed_waiting = got.embedded, got.waiting
+        if seconds is None and not got.error and not self.cfg.vectors and embed.attach(conn, self.cfg, create=False):
+            embed.prune(conn)  # `ns index`: drop vectors of text no note holds any more
+        if got.error:
+            report.warnings.append(unavailable(got.error))
+        elif got.waiting:
+            report.warnings.append("%d section%s not embedded yet, so search by meaning leaves them out; "
+                                   "ns index embeds them all" % (got.waiting, "" if got.waiting == 1 else "s"))
+
     def _delete(self, conn, file_id: int):
         with conn:
+            conn.execute("DELETE FROM sec_embed WHERE file_id=?", (file_id,))
             conn.execute("DELETE FROM sec_fts WHERE rowid IN (SELECT id FROM sections WHERE file_id=?)", (file_id,))
             conn.execute("DELETE FROM sections WHERE file_id=?", (file_id,))
             conn.execute("DELETE FROM links WHERE file_id=?", (file_id,))
@@ -437,6 +463,7 @@ class Index:
         known = self._known_vocab(conn)
         targets: set = set()
         path_text = " ".join(names.parts(rel.rsplit(".", 1)[0].replace("/", " ")) or [stem])
+        embedding = any(self.cfg.groups[g].engine == "embeddings" for g, _ in info["members"])
 
         def setup(note):
             fm = note.fm
@@ -466,6 +493,12 @@ class Index:
                 (cur.lastrowid, title, " ; ".join(state.get("aliases", [])), " ; ".join(state.get("entities", [])),
                  hpath, path_text, state.get("meta", ""), " ; ".join(state.get("tags", [])),
                  names.expansions(title + "\n" + hpath + "\n" + p.text), p.text))
+            if embedding and embed.has_text(p.text):
+                text = embed.doc_text(title, hpath, p.text)
+                key = embed.key_of(self.cfg.embeddings, text)
+                conn.execute("INSERT INTO sec_embed(section_id, file_id, key) VALUES(?,?,?)",
+                             (cur.lastrowid, file_id, key))
+                conn.execute("INSERT OR IGNORE INTO embed_queue(key, text) VALUES(?,?)", (key, text))
             vocab_new.update(names.vocabulary(p.text))
             vocab_new.update(i.lower() for i in names.identifiers(p.text))
             vocab_new.update(names.vocabulary(hpath))
@@ -477,6 +510,7 @@ class Index:
         try:
             with conn:
                 if file_id:
+                    conn.execute("DELETE FROM sec_embed WHERE file_id=?", (file_id,))
                     conn.execute("DELETE FROM sec_fts WHERE rowid IN (SELECT id FROM sections WHERE file_id=?)", (file_id,))
                     conn.execute("DELETE FROM sections WHERE file_id=?", (file_id,))
                     conn.execute("DELETE FROM links WHERE file_id=?", (file_id,))
@@ -521,3 +555,8 @@ class Index:
         except OSError as exc:
             return "cannot read: %s" % exc.strerror
         return None
+
+
+def unavailable(exc) -> str:
+    """The warning for an embeddings engine that cannot run; the same from the index and from a search."""
+    return "search by meaning is unavailable: %s%s; words only" % (exc, ("; fix: " + exc.fix) if exc.fix else "")

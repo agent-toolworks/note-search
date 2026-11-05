@@ -169,6 +169,8 @@ def w_measures(cfg):
     row("…of which opened", "relaxed_open_rate", None, pc)
     row("Searches that corrected a name", "names")
     row("…of which opened", "names_open_rate", None, pc)
+    row("Searches helped by meaning (embeddings)", "semantic")
+    row("…of which opened", "semantic_open_rate", None, pc)
     row("Search time, median ms", "median_ms")
     return answer("table", {"columns": [
         {"id": "measure", "title": "Measure"}, {"id": "week", "title": "Last 7 days"},

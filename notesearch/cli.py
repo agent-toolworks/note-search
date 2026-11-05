@@ -65,7 +65,8 @@ def cmd_search(args):
     groups = cfg.group_ids([g for g in (args.group or "").split(",") if g])
     s = Searcher(conn, cfg)
     res = s.search(wordings, groups, filters, args.since)
-    res.warnings = _warnings(report) + res.warnings
+    first = _warnings(report)
+    res.warnings = first + [w for w in res.warnings if w not in first]
     related = lambda n: s.related(n.file_id, groups, 2)
     q = searchlog.new_id()
     query = {"wordings": res.wordings, "groups": groups, "filters": filters, "since": args.since}
@@ -194,13 +195,16 @@ def cmd_index(args):
     idx = Index(cfg)
     if args.rebuild and not idx.rebuild():
         raise NotReady("another process is updating the index; try the rebuild again in a moment")
-    report = idx.update()
+    report = idx.update(embed_seconds=None, download=args.download)
     data = {"ok": True, "added": report.added, "changed": report.changed, "removed": report.removed,
             "unchanged": report.unchanged, "skipped": len(report.skipped), "busy": report.busy,
             "ms": report.ms, "warnings": report.warnings}
-    _emit(args, "added %(added)d, changed %(changed)d, removed %(removed)d, unchanged %(unchanged)d, "
-                "skipped %(skipped)d in %(ms)d ms" % data + "".join("\nwarning: " + w for w in report.warnings),
-          data)
+    text = ("added %(added)d, changed %(changed)d, removed %(removed)d, unchanged %(unchanged)d, "
+            "skipped %(skipped)d in %(ms)d ms" % data)
+    if cfg.embedded():
+        data["embedded"], data["embed_waiting"] = report.embedded, report.embed_waiting
+        text += "; embedded %d section%s" % (report.embedded, "" if report.embedded == 1 else "s")
+    _emit(args, text + "".join("\nwarning: " + w for w in report.warnings), data)
 
 
 def cmd_config(args):
@@ -336,6 +340,8 @@ def build_parser():
 
     i = sub.add_parser("index", parents=[common], help="update the index now (normally automatic)")
     i.add_argument("--rebuild", action="store_true", help="delete the index and build it again")
+    i.add_argument("--download", action="store_true",
+                   help="let the embeddings engine fetch its model (once); nothing else downloads")
     i.set_defaults(func=cmd_index)
 
     c = sub.add_parser("config", parents=[common], help="check the config file and show what each group covers")
@@ -348,6 +354,8 @@ def build_parser():
     e.add_argument("--baseline", help="scores of the last release, to compare with")
     e.add_argument("--write-baseline", help="write these scores to this file")
     e.add_argument("--verbose", action="store_true", help="list each question's outcome")
+    e.add_argument("--engine", choices=["fts5", "embeddings"],
+                   help="search every group with this engine, whatever the set's config says")
     e.set_defaults(func=cmd_eval)
     return p
 
