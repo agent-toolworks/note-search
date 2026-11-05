@@ -13,29 +13,37 @@ The wordings' rankings are merged by reciprocal rank fusion, then adjusted:
 an exact match on a note's entities counts more, a stale note less, a
 much-linked note a little more. One hit per note: its best section.
 
-A relaxed hit is never shown as a strict one, and an answer with no strict
-hit says so.
+In a group whose engine is "embeddings" (see embed.py), each wording also
+finds the sections closest to it in meaning, a ranking of their own merged
+the same way ("semantic"). Such a hit, like a relaxed one, is never shown as
+a strict one, and an answer with no strict hit says so.
 """
 from __future__ import annotations
 
 import difflib
 import itertools
 import json
+import math
 import os
 import re
 import time
 from dataclasses import dataclass, field
 
-from . import names
-from .index import FTS_COLUMNS
+from . import embed, names
+from .index import FTS_COLUMNS, unavailable
 
 MAX_WORDINGS = 5
 SECTIONS_PER_QUERY = 400
 SNIPPET_READ = 8192
 RELAXED_MAX = 5000  # sections kept for ranking in the relaxed stage, those holding the most words first
 RRF_K = 60
-STAGE_WEIGHT = {"strict": 1.0, "names": 0.9, "relaxed": 0.4}
-STAGE_ORDER = {"strict": 0, "names": 1, "relaxed": 2}
+STAGE_WEIGHT = {"strict": 1.0, "names": 0.9, "relaxed": 0.4, "semantic": 0.5}
+STAGE_ORDER = {"strict": 0, "names": 1, "relaxed": 2, "semantic": 3}
+WORD_STAGES = ("strict", "names")  # the stages whose hits count as a strict match
+# A meaning hit counts by how close it is to the wording's best one, not by its
+# rank: with RRF_K at 60, ranks 1 and 2 differ by under 2%, less than the boosts
+# in _finish, which then decided the order instead of the similarity.
+SEMANTIC_TAU = 0.03
 
 DEFAULT_WEIGHTS = {
     "title": 10.0, "aliases": 10.0, "entities": 8.0, "headings": 5.0, "path": 3.0,
@@ -71,6 +79,7 @@ class Hit:
     rank: int
     terms: list  # the words that found it, to build its snippet later
     coverage: tuple = (0, 0)
+    sim: float = 0.0  # semantic: cosine similarity to the wording
 
 
 @dataclass
@@ -370,13 +379,17 @@ class Searcher:
         stages: set = set()
         per_file: dict = {}
         all_terms = []
+        lists = []
         for w in wordings:
             terms = parse_terms(w)
             all_terms.extend(content_terms(terms))
             if not terms:
                 warnings.append("wording %r has no words to search for" % w)
                 continue
-            hits = self._wording(terms, scope, stages)
+            lists.append(self._wording(terms, scope, stages))
+        lists.extend(self._semantic(wordings, groups, filters or {}, since, stages, warnings))
+        for hits in lists:
+            top_sim = hits[0].sim if hits else 0.0
             file_rank = {}
             for h in hits:
                 if h.file_id not in file_rank:
@@ -385,12 +398,15 @@ class Searcher:
                 entry["sections"].add(h.section_id)
             for fid, (r, h) in file_rank.items():
                 entry = per_file[fid]
-                entry["score"] += STAGE_WEIGHT[h.stage] / (RRF_K + r)
+                if h.stage == "semantic":
+                    entry["score"] += STAGE_WEIGHT[h.stage] * math.exp((h.sim - top_sim) / SEMANTIC_TAU) / RRF_K
+                else:
+                    entry["score"] += STAGE_WEIGHT[h.stage] / (RRF_K + r)
                 best = entry["best"]
                 if best is None or (STAGE_ORDER[h.stage], r) < (STAGE_ORDER[best[0].stage], best[1]):
                     entry["best"] = (h, r)
         notes = self._finish(per_file, all_terms, wordings, groups, limit)
-        strict_found = any(n.stage != "relaxed" for n in notes)
+        strict_found = any(n.stage in WORD_STAGES for n in notes)
         nearest = []
         if not strict_found:
             for t in all_terms:
@@ -400,6 +416,26 @@ class Searcher:
                             nearest.append(c)
         return Result(notes, wordings, groups, sorted(stages, key=STAGE_ORDER.get), strict_found,
                       nearest[:5], warnings, int((time.time() - start) * 1000))
+
+    def _semantic(self, wordings: list, groups: list, filters: dict, since: str, stages: set, warnings: list) -> list:
+        """One list of hits per wording, from the sections closest in meaning, in embedded groups."""
+        embedded = self.cfg.embedded(groups)
+        if not embedded or not wordings:
+            return []
+        scope = self._scope(embedded, filters, since)
+        try:
+            found = embed.search(self.conn, self.cfg, wordings, scope)
+        except embed.Unavailable as exc:
+            warnings.append(unavailable(exc))
+            return []
+        out = []
+        for w, rows in zip(wordings, found):
+            terms = [t.text for t in content_terms(parse_terms(w))]
+            hits = [Hit(fid, sid, "semantic", r, terms, sim=sim) for r, (sid, fid, sim) in enumerate(rows)]
+            if hits:
+                stages.add("semantic")
+            out.append(hits)
+        return out
 
     def _finish(self, per_file: dict, terms: list, wordings: list, groups: list, limit: int) -> list:
         if not per_file:

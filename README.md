@@ -11,6 +11,8 @@ hundred tokens.
 - **Cheap.** Answers are capped (600 tokens by default), one hit per note, best
   section only. No answer ever returns a whole large file.
 - **No AI model, no network.** `python3` and SQLite's full-text search (FTS5) only.
+  A group can opt in to [search by meaning](#search-by-meaning-optional) with
+  a small local model or an embeddings server.
 - **Measured.** A scored question set gates every change, and every search is
   logged (words and references, never note text) so
   [toolworks-hub](https://github.com/agent-toolworks/toolworks-hub) can show
@@ -125,9 +127,9 @@ than one `~/.claude*` folder).
 | `ns groups` | Each group: folders, note count |
 | `ns fields <group>` | Frontmatter fields found, with counts and examples, to help map roles |
 | `ns doctor [--secrets]` | Setup, index health, unreadable frontmatter, skipped and partly indexed files; `--secrets` flags text that looks like credentials, without printing it |
-| `ns index [--rebuild]` | Updates now; normally not needed |
+| `ns index [--rebuild] [--download]` | Updates now, embedding every waiting section; normally not needed. `--download` lets the embeddings engine fetch its model |
 | `ns config check` | Validates the config and shows each group's folders and field roles |
-| `ns eval <questions.json>` | Scores search quality; `--gate` exits 1 below the release gates |
+| `ns eval <questions.json> [--engine embeddings]` | Scores search quality; `--gate` exits 1 below the release gates |
 | `ns add --group g --title T [--entities a,b] [--tags t] [--source S] [--new \| --supersedes ref] < text.md` | Creates a note in the group's write folder (below) |
 | `ns add --append <ref> < text.md` | Adds text to a note `ns add` created, under a dated heading |
 
@@ -187,6 +189,73 @@ labels those hits as partial. The wordings' rankings are merged; an exact match 
 a note's entities or title counts more, a stale note less. The design doc has the
 details.
 
+## Search by meaning (optional)
+
+Words miss a note written in other words: "how do shoppers get billed?" finds
+nothing in a note about "card payments". A group can also be searched by
+meaning, with embeddings from a small model:
+
+```json
+{
+  "embeddings": {"python": "~/.local/share/ns-embed/bin/python"},
+  "groups": {"kb": {"dirs": ["~/work/kb"], "engine": "embeddings"}}
+}
+```
+
+Each wording then also finds the sections closest to it in meaning. Those hits
+are merged with the words' hits, never replace them, never count as a strict
+match, and are labelled `close in meaning, not in words`. It is off by default,
+and the default install never loads a model or a package.
+
+Two providers:
+
+- **`fastembed`** (the default): a local model, `BAAI/bge-small-en-v1.5`
+  (67 MB, English), run by the [fastembed](https://github.com/qdrant/fastembed)
+  package. Install it in a Python of its own and name that Python, so ns itself
+  keeps to the standard library:
+
+  ```sh
+  python3 -m venv ~/.local/share/ns-embed
+  ~/.local/share/ns-embed/bin/pip install fastembed
+  ns index --download      # fetches the model once; nothing else downloads
+  ```
+
+  `"model"` picks another of fastembed's models.
+- **`http`**: any server that answers OpenAI's `POST /embeddings`, such as
+  Ollama, LM Studio or llama.cpp's server. Nothing to install in Python:
+
+  ```json
+  "embeddings": {"provider": "http", "url": "http://localhost:11434/v1", "model": "nomic-embed-text"}
+  ```
+
+  A hosted service works the same way. Its URL is in ns.json, and so is
+  `"api_key_env"`, the environment variable holding its key. Section text then
+  leaves the machine, so name one only if that is allowed.
+
+Vectors are kept in `vectors.db` beside the index, keyed by model and text, so
+a rebuilt index or a moved note is not embedded again. A search or other
+command spends at most 2 seconds embedding new sections and says how many are
+left; `ns index` embeds them all. `ns doctor` checks the engine and how much is
+embedded. If the engine cannot run, searches use words only, with one warning
+naming the fix. `ns eval --engine embeddings` scores a question set with the
+engine on.
+
+What it costs and what it finds, on the M2 below with the default model:
+
+- **Embedding**, once per section: about 35 ms, so 1,000 notes of 5 sections
+  each take about 3 minutes the first time. After that only changed sections
+  are embedded.
+- **A search** from the command line takes about 0.4 s, mostly starting the
+  model. In one process (the hub, `ns eval`) it takes 26 ms at the median
+  over 8,000 sections with numpy, 220 ms without.
+- **Found**: on the reworded set (`fixtures/eval/reworded.json`, 24
+  questions asked in other words than the notes use), the right note is in
+  the top 5 for all 24, against 8 of 24 with words only, and first for 75%,
+  against 25%. On the main set it stays in the top 5 for all, and is first
+  for 98% instead of 100%. The one question it moves down is "which
+  services does identity-team own?", where it puts the team's ownership map
+  first.
+
 ## Measured
 
 On an M2 MacBook Air with 16 GB, with generated engineering-style notes
@@ -207,8 +276,11 @@ about three times that.
 
 Search quality on the committed question set (`fixtures/eval`: 61 questions over
 made-up services, tables, incidents and agent memory): the right note is in the
-top 5 for all of them and first for 98%. That set was written by the same hand as
-the search, so it is easier than real use.
+top 5 for all of them and first for all of them. That set was written by the same hand as
+the search, so it is easier than real use. The reworded set
+(`fixtures/eval/reworded.json`) asks 24 questions in other words than the notes
+use. With words only, the right note is in the top 5 for a third of them; that
+is the gap search by meaning closes (above).
 
 Keep a second set over your own notes outside the repo: a folder with a
 `questions.json` and an `ns.json` naming your real folders by absolute path.
@@ -223,6 +295,10 @@ python3 -m unittest discover -s tests -t .      # all suites, about 16 s
 NS_BENCH=1 python3 -m unittest tests.test_scale  # also 10,000 notes against the design's limits
 scripts/bench                                    # the numbers above
 bin/ns eval fixtures/eval/questions.json --verbose --baseline fixtures/eval-baseline.json
+bin/ns eval fixtures/eval/reworded.json --verbose --baseline fixtures/eval-reworded-baseline.json
+# with the embeddings engine (needs fastembed and its model, see above):
+<python with fastembed> bin/ns eval fixtures/eval/reworded.json --engine embeddings \
+  --baseline fixtures/eval-reworded-embeddings-baseline.json
 ```
 
 ## License

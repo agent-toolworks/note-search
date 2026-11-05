@@ -1,0 +1,28 @@
+{
+  "budget": 600,
+  "floors": false,
+  "index": {
+    "ms": 42,
+    "notes": 36,
+    "skipped": 0
+  },
+  "kinds": {
+    "reworded": {
+      "ask_top5": 1.0,
+      "first": 0.75,
+      "n": 24,
+      "tokens_avg": 530,
+      "tokens_max": 589,
+      "top5": 1.0
+    }
+  },
+  "over_budget": [],
+  "overall": {
+    "ask_top5": 1.0,
+    "first": 0.75,
+    "n": 24,
+    "tokens_avg": 530,
+    "tokens_max": 589,
+    "top5": 1.0
+  }
+}

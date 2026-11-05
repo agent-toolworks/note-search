@@ -8,6 +8,7 @@ import sqlite3
 import sys
 
 from . import config as cfglib
+from . import embed
 from .index import Index
 
 _SECRETS = [
@@ -44,6 +45,26 @@ class Checks:
     @property
     def failed(self) -> bool:
         return any(it["status"] == "FAIL" for it in self.items)
+
+
+def _embeddings(c, cfg, conn, report):
+    s = cfg.embeddings
+    what = "embeddings %s for %s" % (s.describe(), ", ".join(cfg.embedded()))
+    p = embed.provider(s)
+    try:
+        dim = len(p.embed(["ns doctor"], query=True)[0])
+    except embed.Unavailable as exc:
+        c.add("FAIL", "%s: %s" % (what, exc), exc.fix or None)
+        return
+    finally:
+        p.close()
+    c.add("OK", "%s: %d dimensions" % (what, dim))
+    have = conn.execute("SELECT count(*) FROM sec_embed").fetchone()[0]
+    if report.embed_waiting:
+        c.add("WARN", "%d of %d sections embedded; search by meaning leaves out the rest" % (
+            have - report.embed_waiting, have), "ns index")
+    else:
+        c.add("OK", "all %d sections of those groups embedded" % have)
 
 
 def run(args) -> tuple:
@@ -104,6 +125,8 @@ def run(args) -> tuple:
     else:
         c.add("OK", "index %s: %d notes, %d sections, %.1f MB, updated in %d ms" % (
             idx.path, notes, sections, size / 1e6, report.ms))
+    if cfg.embedded():
+        _embeddings(c, cfg, conn, report)
     if report.busy:
         c.add("WARN", "another process holds the index lock", "wait for it; if none is running, delete %s" % idx.lock_path)
     for w in report.warnings:

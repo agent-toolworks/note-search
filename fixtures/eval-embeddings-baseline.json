@@ -1,0 +1,92 @@
+{
+  "budget": 600,
+  "floors": true,
+  "index": {
+    "ms": 1321,
+    "notes": 37,
+    "skipped": 0
+  },
+  "kinds": {
+    "conclusion": {
+      "ask_top5": 1.0,
+      "first": 1.0,
+      "n": 9,
+      "tokens_avg": 410,
+      "tokens_max": 564,
+      "top5": 1.0
+    },
+    "current": {
+      "ask_top5": 1.0,
+      "first": 1.0,
+      "n": 6,
+      "tokens_avg": 326,
+      "tokens_max": 558,
+      "top5": 1.0
+    },
+    "exact": {
+      "ask_top5": 1.0,
+      "first": 1.0,
+      "n": 9,
+      "tokens_avg": 275,
+      "tokens_max": 394,
+      "top5": 1.0
+    },
+    "frontmatter": {
+      "ask_top5": 1.0,
+      "first": 0.6666666666666666,
+      "n": 3,
+      "tokens_avg": 337,
+      "tokens_max": 441,
+      "top5": 1.0
+    },
+    "large-file": {
+      "ask_top5": 1.0,
+      "first": 1.0,
+      "n": 3,
+      "tokens_avg": 340,
+      "tokens_max": 555,
+      "top5": 1.0
+    },
+    "none": {
+      "ask_top5": 1.0,
+      "first": 1.0,
+      "n": 6,
+      "tokens_avg": 290,
+      "tokens_max": 487,
+      "top5": 1.0
+    },
+    "other-group": {
+      "ask_top5": 1.0,
+      "first": 1.0,
+      "n": 7,
+      "tokens_avg": 181,
+      "tokens_max": 415,
+      "top5": 1.0
+    },
+    "partial": {
+      "ask_top5": 1.0,
+      "first": 1.0,
+      "n": 6,
+      "tokens_avg": 362,
+      "tokens_max": 512,
+      "top5": 1.0
+    },
+    "symptom": {
+      "ask_top5": 1.0,
+      "first": 1.0,
+      "n": 12,
+      "tokens_avg": 482,
+      "tokens_max": 588,
+      "top5": 1.0
+    }
+  },
+  "over_budget": [],
+  "overall": {
+    "ask_top5": 1.0,
+    "first": 0.9836065573770492,
+    "n": 61,
+    "tokens_avg": 346,
+    "tokens_max": 588,
+    "top5": 1.0
+  }
+}

@@ -29,6 +29,8 @@ def note_lines(i: int, note) -> list:
         flags.append("partial match %d/%d words" % tuple(note.coverage))
     elif note.stage == "names":
         flags.append("matched a corrected name")
+    elif note.stage == "semantic":
+        flags.append("close in meaning, not in words")
     head = "%d %s  L%d-%d  %s" % (i, note.section_ref, note.line_start, note.line_end, _date(note))
     if flags:
         head += "  [" + "; ".join(flags) + "]"
@@ -62,7 +64,10 @@ def search_text(res, budget: int, offset: int, related, q: str = "") -> tuple:
             "" if len(res.wordings) == 1 else "s", res.ms)
         out.append(head + (" · q %s" % q if q else ""))
         if not res.strict_found:
-            out.append("no strict match; partial matches only" +
+            kinds = {n.stage for n in res.notes}
+            what = ("partial matches only" if kinds == {"relaxed"} else
+                    "matches by meaning only" if kinds == {"semantic"} else "partial and meaning matches only")
+            out.append("no strict match; " + what +
                        ("; nearest names: " + ", ".join(res.nearest) if res.nearest else ""))
     # The lines that come after the notes count too: the warnings always, and
     # the "N more" line whenever a note is left out.

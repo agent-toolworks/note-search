@@ -34,3 +34,21 @@ class Quality(unittest.TestCase):
         self.assertEqual(self.scores["index"]["skipped"], 0)
         large = self.scores["kinds"]["large-file"]
         self.assertEqual(large["top5"], 1.0)
+
+
+class Reworded(unittest.TestCase):
+    """Questions in other words than the notes: held to their baseline, not to the floors."""
+
+    def test_no_kind_drops(self):
+        path = os.path.join(ROOT, "fixtures", "eval", "reworded.json")
+        scores = evaluate.score(path)
+        self.assertFalse(scores["floors"])
+        with open(os.path.join(ROOT, "fixtures", "eval-reworded-baseline.json")) as fh:
+            baseline = json.load(fh)
+        self.assertEqual(evaluate.gates(scores, baseline), [])
+        self.assertEqual(scores["overall"]["n"], 24)
+
+    def test_floors_still_apply_to_other_sets(self):
+        low = {"floors": True, "overall": {"top5": 0.5, "first": 0.5}, "over_budget": [], "kinds": {}}
+        self.assertEqual(len(evaluate.gates(low)), 2)
+        self.assertEqual(evaluate.gates(dict(low, floors=False)), [])

@@ -142,8 +142,9 @@ def measures(searches: list, gets: list, since) -> dict:
     known = [s for s in ss if s.session]
     opened = [s for s in hits if s.opened]
     ranked = [s for s in opened if s.ranks]
-    relaxed = [s for s in hits if not s.strict]
+    relaxed = [s for s in hits if not s.strict and "relaxed" in (s.e.get("stages") or [])]
     named = [s for s in hits if "names" in (s.e.get("stages") or [])]
+    meant = [s for s in hits if "semantic" in (s.e.get("stages") or [])]
     return {
         "searches": len(ss),
         "gets": len(gs),
@@ -159,6 +160,8 @@ def measures(searches: list, gets: list, since) -> dict:
         "relaxed_open_rate": _pct(len([s for s in relaxed if s.opened]), len(relaxed)),
         "names": len(named),
         "names_open_rate": _pct(len([s for s in named if s.opened]), len(named)),
+        "semantic": len(meant),
+        "semantic_open_rate": _pct(len([s for s in meant if s.opened]), len(meant)),
         "median_ms": _median([s.e.get("ms") or 0 for s in ss]),
     }
 
